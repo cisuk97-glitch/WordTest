@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title> Cozy Kawaii Study Room - 에빙하우스 단어장</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="assets/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#FAF6EE">
+  <!-- Supabase JS CDN (공식 v2) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+
+<body>
+
+  <!-- 1. Top Navbar -->
+  <header class="top-navbar">
+    <div class="nav-left">
+      <div class="brand-badge" id="brandHomeBtn" title="홈으로 이동">
+        <img src="assets/mascot.png" class="brand-icon" alt="Mascot">
+        <span>Cozy Study Room</span>
+      </div>
+      <div class="nav-progress-pill" id="topProgressPill" title="오늘의 진도 (클릭하여 목표 변경)" style="cursor: pointer;">
+        <span>오늘의 진도</span>
+        <div class="progress-mini-bar">
+          <div class="progress-mini-fill" id="topProgressFill" style="width: 45%;"></div>
+        </div>
+        <span id="topProgressText">9/20</span>
+      </div>
+    </div>
+
+    <div class="nav-right">
+      <!-- 데이터베이스 연결 상태 배지 -->
+      <span id="dbStatusBadge" class="status-pill status-local" title="데이터베이스 연결 상태">🟡 로컬 모드</span>
+
+      <!-- 단어장 선택 드롭다운 -->
+      <select id="activeWordbookSelect" class="btn-tool-kawaii"
+        style="padding: 8px 12px; font-weight: 800; border-radius: var(--radius-full);">
+        <option value="">등록된 단어장 없음</option>
+      </select>
+
+      <!-- 환경설정 버튼 -->
+      <button class="btn-icon-kawaii" id="openSettingsBtn" title="Supabase 및 앱 설정">⚙️</button>
+    </div>
+  </header>
+
+  <!-- 2. Main Layout -->
+  <div class="study-room-layout">
+
+    <!-- A. 좌측 다이어리 서랍 메뉴 (Drawer) -->
+    <aside class="cozy-drawer">
+      <div class="drawer-header">
+        <div class="drawer-title">
+          <span>🍓</span>
+          <span>WORDS</span>
+        </div>
+        <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted);" id="currentDateDisplay">10월 17일
+          (토)</span>
+      </div>
+
+      <!-- 다이어리 스티커 통계 그리드 -->
+      <div class="stat-stickers-grid">
+        <div class="stat-sticker peach">
+          <span class="stat-label">오늘 신규</span>
+          <span class="stat-val" id="statTodayNew">0 / 10</span>
+        </div>
+        <div class="stat-sticker lavender">
+          <span class="stat-label">오늘 복습</span>
+          <span class="stat-val" id="statTodayReview">0 / 20</span>
+        </div>
+        <div class="stat-sticker mint">
+          <span class="stat-label">완료율</span>
+          <span class="stat-val" id="statAccuracy">0%</span>
+        </div>
+        <div class="stat-sticker lemon">
+          <span class="stat-label">취약 단어</span>
+          <span class="stat-val" id="statVulnerable">0</span>
+        </div>
+      </div>
+
+      <!-- 내비게이션 메뉴 탭 -->
+      <nav class="drawer-nav-list">
+        <button class="drawer-nav-btn active" data-view="study">
+          <span class="tab-emoji">📖</span>
+          <span>오늘의 학습</span>
+        </button>
+        <button class="drawer-nav-btn" data-view="test">
+          <span class="tab-emoji">✍️</span>
+          <span>단어 테스트</span>
+        </button>
+        <button class="drawer-nav-btn" data-view="wordlist">
+          <span class="tab-emoji">📑</span>
+          <span>오늘의 단어 목록</span>
+        </button>
+        <button class="drawer-nav-btn" data-view="wordbooks">
+          <span class="tab-emoji">📚</span>
+          <span>단어장 관리</span>
+        </button>
+        <button class="drawer-nav-btn" data-view="stats">
+          <span class="tab-emoji">📊</span>
+          <span>Memory Lab</span>
+        </button>
+      </nav>
+
+      <!-- 연속 출석 응원 배너 -->
+      <div class="streak-banner">
+        <img src="assets/mascot.png" class="streak-bear" alt="Streak Mascot">
+        <div>
+          <div style="color: var(--text-main); font-weight: 800;">연속 출석 열공 중!</div>
+          <div style="font-size: 0.78rem; color: var(--text-muted); font-weight: 500;">오늘도 화이팅 ✨</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- B. 메인 뷰포트 영역 -->
+    <main class="study-main-area">
+
+      <!-- ========================================================
+           VIEW 1: 플래시카드 단어 학습 (study)
+           ======================================================== -->
+      <section id="view-study" class="view-section">
+        <div class="flashcard-stage">
+          <div class="masking-tape"></div>
+
+          <div class="cozy-card-desk">
+            <div class="card-header-bar">
+              <span class="unit-tag" id="cardUnitBadge">안내</span>
+              <span class="stage-pill" id="cardStageBadge">단어장 없음</span>
+            </div>
+
+            <div class="card-main-content">
+              <div class="vocab-word-large" id="cardWordText">단어장을 등록해주세요 🌸</div>
+
+              <div class="vocab-pronounce" id="cardPronounceBtn" title="원어민 발음 듣기 (클릭)">
+                <span>🔊</span>
+                <span id="cardPronounceText"></span>
+              </div>
+
+              <!-- 한글 뜻 (블러 처리 & 클릭 시 표시) -->
+              <div class="vocab-meaning-box" id="cardMeaningBox" title="클릭하여 뜻 확인">
+                상단의 '단어장 관리' 메뉴에서 CSV 단어장을 등록하면 학습이 시작됩니다.
+              </div>
+
+              <!-- 예문 포스트잇 -->
+              <div class="vocab-example-postit" id="cardExampleBox">
+                <!-- 예문 1 -->
+                <div class="ex-block" id="cardEx1Wrap">
+                  <div class="ex-en" id="cardExEn">등록된 예문이 없습니다.</div>
+                  <div class="ex-kr" id="cardExKr"></div>
+                </div>
+                <!-- 예문 2 (있을 때만 노출) -->
+                <div class="ex-block ex-second" id="cardEx2Wrap" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed rgba(255, 180, 0, 0.45);">
+                  <div class="ex-en" id="cardExEn2"></div>
+                  <div class="ex-kr" id="cardExKr2"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 하단 암기 여부 액션 버튼 -->
+            <div class="card-action-buttons">
+              <button class="btn-card-action btn-again" id="cardBtnAgain">
+                <span>🔄</span>
+                <span>다시 볼래요</span>
+              </button>
+              <button class="btn-card-action btn-know" id="cardBtnKnow">
+                <span>💖</span>
+                <span>알고 있어요</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================
+           VIEW 2: 주관식 단어 테스트 (test) - 키보드 & Apple Pencil 캔버스
+           ======================================================== -->
+      <section id="view-test" class="view-section" style="display: none;">
+        <div class="test-arena-card">
+          <!-- 상단 진행 타이머 & 입력 모드 토글 -->
+          <div class="test-stepper-header">
+            <div class="test-timer-badge">
+              <span>⏱️</span>
+              <span id="testStopwatch">00:00</span>
+            </div>
+
+            <div style="font-weight: 800; color: var(--coral-pink);" id="testQuestionIndex">
+              문제 1 / 10
+            </div>
+
+            <!-- 입력 방식 토글 (키보드 vs Apple Pencil 손글씨) -->
+            <div class="mode-toggle-group">
+              <button class="btn-mode-toggle active" id="modeKeyboardBtn">⌨️ 키보드</button>
+              <button class="btn-mode-toggle" id="modePencilBtn">✏️ 손글씨(펜)</button>
+            </div>
+          </div>
+
+          <!-- 문제 제시 영역 -->
+          <div class="question-prompt-box">
+            <div class="q-type-label" id="testQuestionTypeBadge">한글 뜻 보고 영어 철자 입력하기</div>
+            <div class="q-main-text" id="testQuestionMain">외모, 겉모습; 출현</div>
+            <div class="q-sub-hint" id="testQuestionHint">첫 글자 힌트: a _ _ _ _ _ _ _ _ _</div>
+          </div>
+
+          <!-- A. 키보드 입력 필드 -->
+          <div class="keyboard-input-wrap" id="wrapKeyboardInput">
+            <input type="text" class="cozy-text-input" id="testAnswerInput" placeholder="영어 단어를 입력하고 Enter를 누르세요..."
+              autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+          </div>
+
+          <!-- B. Apple Pencil 캔버스 필기 패드 -->
+          <div class="canvas-station-wrap" id="wrapCanvasInput" style="display: none;">
+            <div class="canvas-toolbar">
+              <div class="canvas-tool-group">
+                <button class="btn-tool-kawaii active" id="penToolBtn">✏️ 연필</button>
+                <button class="btn-tool-kawaii" id="highlighterToolBtn">🖍️ 형광펜</button>
+                <button class="btn-tool-kawaii" id="eraserToolBtn">🧽 지우개</button>
+              </div>
+              <div class="canvas-tool-group">
+                <button class="btn-tool-kawaii" id="canvasUndoBtn">↩️ 되돌리기</button>
+                <button class="btn-tool-kawaii" id="canvasClearBtn">🗑️ 전체지우기</button>
+              </div>
+            </div>
+
+            <div class="pencil-canvas-container">
+              <canvas id="handwritingCanvas"></canvas>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); text-align: right;">
+              💡 Apple Pencil이나 손가락으로 자연스럽게 필기할 수 있습니다.
+            </div>
+          </div>
+
+          <!-- 주관식 답안 제출 버튼 -->
+          <div style="display: flex; gap: 12px; margin-top: 10px;">
+            <button class="btn-kawaii-secondary" id="testSkipBtn" style="flex: 1;">패스 ⏩</button>
+            <button class="btn-kawaii-primary" id="testSubmitBtn" style="flex: 2;">정답 제출 및 다음 문제 💖</button>
+          </div>
+
+          <!-- 참 잘했어요 스탬프 도장 오버레이 -->
+          <div class="stamp-overlay" id="testStampOverlay">
+            🌸 참 잘했어요!
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================
+           VIEW 3: 테스트 결과 다이어리 스크랩북 (results)
+           ======================================================== -->
+      <section id="view-results" class="view-section" style="display: none;">
+        <div class="results-scrapbook">
+          <div class="result-banner-mascot">🎉<img src="assets/mascot.png" class="result-mascot-img" alt="Mascot">✨
+          </div>
+          <h2 style="font-family: var(--font-cute); font-size: 2.2rem; color: var(--coral-pink);">오늘의 주관식 테스트 완료!</h2>
+
+          <div class="result-score-circle">
+            <span class="pct" id="resAccuracyPct">90%</span>
+            <span style="font-size: 0.85rem; font-weight: 700;">정답률</span>
+          </div>
+
+          <div style="display: flex; justify-content: center; gap: 24px; font-weight: 700;">
+            <div>총 문제: <span id="resTotalCount">10</span>개</div>
+            <div style="color: #208B67;">정답: <span id="resCorrectCount">9</span>개</div>
+            <div style="color: var(--coral-pink);">오답: <span id="resWrongCount">1</span>개</div>
+            <div>풀이 시간: <span id="resDurationText">2분 15초</span></div>
+          </div>
+
+          <!-- 기존 플래너(schedules) 연동 안내 -->
+          <div class="planner-sync-notice">
+            <span style="font-size: 1.5rem;">🗓️</span>
+            <div>
+              <div style="color: #208B67; font-weight: 800;">내신 플래너(schedules)에 실적이 자동 기록되었습니다!</div>
+              <div style="font-size: 0.82rem; color: var(--text-muted);" id="resPlannerDetail">
+                [단어테스트] 수능 2000 핵심 단어 (90%) - 소요시간: 135초, 완료(TRUE)
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: center; gap: 14px; margin-top: 10px;">
+            <button class="btn-kawaii-secondary" id="resRetryWrongBtn">오답만 다시 풀기 🔄</button>
+            <button class="btn-kawaii-primary" id="resFinishBtn">오늘의 학습 완료 🌸</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================
+           VIEW: 오늘 학습 단어 전체 목록 & 인쇄 (wordlist)
+           ======================================================== -->
+      <section id="view-wordlist" class="view-section" style="display: none;">
+        <!-- A4 인쇄 전용 시험지/단어장 헤더 (화면에서는 숨김, 타이틀 없이 메타 정보만 출력) -->
+        <div class="print-exam-header">
+          <div class="print-meta-box">
+            <div><strong>일자:</strong> 2026년 _____월 _____일</div>
+            <div><strong>이름:</strong> ___________________</div>
+            <div><strong>점수:</strong> _______ / _______점</div>
+            <div class="print-stamp-area">💖 참 잘했어요!</div>
+          </div>
+        </div>
+
+        <div class="test-arena-card wordlist-screen-card">
+          <!-- 상단 툴바 및 필터 -->
+          <div class="wordlist-screen-toolbar">
+            <div
+              style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 2px dashed var(--border-soft); padding-bottom: 14px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <h2 style="font-family: var(--font-cute); font-size: 1.8rem; color: var(--coral-pink); margin: 0;">
+                  📑 오늘의 학습 단어장
+                </h2>
+                <span class="unit-tag" id="wordlistCountBadge">0단어</span>
+              </div>
+
+              <!-- 인쇄 & 보기 모드 액션 버튼 -->
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <button class="btn-tool-kawaii" id="toggleMeaningBtn" title="단어 뜻 블러/표시 토글">👁️ 뜻 가리기</button>
+                <button class="btn-tool-kawaii" id="toggleExampleBtn" title="예문 접기/펴기 토글">💬 예문 접기</button>
+                <button class="btn-tool-kawaii" id="printMemoBtn"
+                  style="background: var(--baby-pink-soft); color: var(--coral-pink); border-color: var(--coral-pink);">
+                  🖨️ 암기장 인쇄
+                </button>
+                <button class="btn-tool-kawaii" id="printExamBtn"
+                  style="background: var(--honey-lemon-soft); color: #B7791F; border-color: var(--honey-lemon);">
+                  📝 빈칸 시험지 인쇄
+                </button>
+              </div>
+            </div>
+
+            <!-- 하단 필터 탭 & 검색창 -->
+            <div
+              style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 14px;">
+              <div class="mode-toggle-group">
+                <button class="btn-mode-toggle active" data-filter="all">전체 (<span id="cntFilterAll">0</span>)</button>
+                <button class="btn-mode-toggle" data-filter="new">오늘 신규 (<span id="cntFilterNew">0</span>)</button>
+                <button class="btn-mode-toggle" data-filter="review">오늘 복습 (<span
+                    id="cntFilterReview">0</span>)</button>
+                <button class="btn-mode-toggle" data-filter="vulnerable">취약 단어 (<span
+                    id="cntFilterVulnerable">0</span>)</button>
+              </div>
+
+              <div
+                style="display: flex; align-items: center; gap: 8px; flex: 1; max-width: 380px; justify-content: flex-end;">
+                <input type="text" id="wordlistSearchInput" class="cozy-text-input"
+                  style="height: 38px; font-size: 0.9rem; padding: 0 14px; border-radius: var(--radius-full);"
+                  placeholder="단어 또는 뜻 검색...">
+                <select id="wordlistSortSelect" class="btn-tool-kawaii"
+                  style="height: 38px; padding: 4px 10px; border-radius: var(--radius-full);">
+                  <option value="unit">단원순</option>
+                  <option value="alpha">알파벳순</option>
+                  <option value="weak">취약도순</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- 단어 목록 카드 그리드 -->
+          <div id="todayWordListContainer" class="wordlist-grid-container">
+            <!-- 동적 렌더링 -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================
+           VIEW 4: 단어장 관리 및 words_all.csv 업로드 (wordbooks)
+           ======================================================== -->
+      <section id="view-wordbooks" class="view-section" style="display: none;">
+        <div class="test-arena-card">
+          <div
+            style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px dashed var(--border-soft); padding-bottom: 12px;">
+            <h2 style="font-family: var(--font-cute); font-size: 1.8rem; color: var(--coral-pink);">📚 나의 단어장 서재</h2>
+            <button class="btn-kawaii-primary" id="openUploadCsvBtn" style="padding: 8px 18px; font-size: 0.95rem;">+
+              CSV 단어장 등록</button>
+          </div>
+
+          <div id="wordbooksListContainer" style="display: flex; flex-direction: column; gap: 14px;">
+            <!-- 동적으로 단어장 카드 렌더링 -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================
+           VIEW 5: 에빙하우스 망각곡선 & 누적 통계 (stats)
+           ======================================================== -->
+      <section id="view-stats" class="view-section" style="display: none;">
+        <div class="test-arena-card">
+          <h2
+            style="font-family: var(--font-cute); font-size: 1.8rem; color: var(--coral-pink); border-bottom: 2px dashed var(--border-soft); padding-bottom: 12px;">
+            📊 My Memory Stats
+          </h2>
+
+          <div class="stats-cards-row">
+            <div class="stat-sticker peach stat-mini">
+              <span class="stat-label">누적 학습 단어</span>
+              <span class="stat-val" id="statsTotalLearned">0</span>
+            </div>
+            <div class="stat-sticker lavender stat-mini">
+              <span class="stat-label">완전 숙련 단어 (30일+)</span>
+              <span class="stat-val" id="statsMastered">0</span>
+            </div>
+            <div class="stat-sticker mint stat-mini">
+              <span class="stat-label">평균 주관식 정답률</span>
+              <span class="stat-val" id="statsAvgAccuracy">0%</span>
+            </div>
+            <div class="stat-sticker lemon stat-mini">
+              <span class="stat-label">취약 단어 집중 복습</span>
+              <span class="stat-val" id="statsVulnerableCount">0</span>
+            </div>
+          </div>
+
+          <div
+            style="background: var(--bg-card-alt); border: 2px solid var(--border-soft); border-radius: var(--radius-md); padding: 20px;">
+            <h3 style="font-size: 1.1rem; color: var(--text-main); margin-bottom: 12px;">🌟 망각곡선 단계별 분포 (Spaced
+              Repetition Stages)</h3>
+            <div id="stageDistributionBars" style="display: flex; flex-direction: column; gap: 8px;">
+              <!-- 1일, 3일, 7일, 14일, 30일 단계별 단어 바 렌더링 -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- 3. 설정 모달 (Supabase 환경설정) -->
+  <div class="kawaii-modal-backdrop" id="settingsModal">
+    <div class="kawaii-modal-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-family: var(--font-cute); font-size: 1.6rem; color: var(--coral-pink);">⚙️ Cozy Study Room 설정
+        </h3>
+        <button class="btn-icon-kawaii" id="closeSettingsBtn" style="width: 32px; height: 32px;">✕</button>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div>
+          <label
+            style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">Supabase
+            Project URL</label>
+          <input type="text" id="cfgSbUrl" class="cozy-text-input" style="height: 44px; font-size: 0.95rem;"
+            placeholder="https://xyzcompany.supabase.co">
+        </div>
+
+        <div>
+          <label
+            style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">Supabase
+            Anon Key</label>
+          <input type="password" id="cfgSbKey" class="cozy-text-input" style="height: 44px; font-size: 0.95rem;"
+            placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+        </div>
+
+        <!-- 실시간 DB 연결 상태 안내 메시지 -->
+        <div id="sbConnectionAlert" class="connection-alert status-local">
+          연결 상태를 확인해주세요.
+        </div>
+
+        <!-- 🎯 일일 학습 목표 설정 섹션 -->
+        <div style="border-top: 1px dashed var(--border-soft); padding-top: 12px; margin-top: 2px;">
+          <div style="font-weight: 800; font-size: 0.95rem; color: var(--text-main); margin-bottom: 8px;">🎯 일일 학습 목표 설정</div>
+          <div style="display: flex; gap: 10px;">
+            <div style="flex: 1;">
+              <label style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">새로운 단어 목표 (개)</label>
+              <input type="number" id="cfgTargetNew" class="cozy-text-input" style="height: 40px; font-size: 0.95rem;" min="1" max="100" value="10">
+            </div>
+            <div style="flex: 1;">
+              <label style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">복습 단어 목표 (개)</label>
+              <input type="number" id="cfgTargetReview" class="cozy-text-input" style="height: 40px; font-size: 0.95rem;" min="1" max="200" value="20">
+            </div>
+          </div>
+          <div style="font-size: 0.76rem; color: var(--text-muted); margin-top: 6px;">
+            💡 설정된 목표 합계에 맞춰 오늘 학습 큐와 상단바 진도율이 자동 갱신됩니다.
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap;">
+          <button class="btn-kawaii-secondary" id="btnTestSbConnection"
+            style="flex: 1; padding: 10px 14px; font-size: 0.9rem;">⚡ 연결 테스트</button>
+          <button class="btn-kawaii-primary" id="btnSaveConfig"
+            style="flex: 1; padding: 10px 14px; font-size: 0.9rem;">설정 저장하기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3.5. CSV 단어장 등록 모달 -->
+  <div class="kawaii-modal-backdrop" id="uploadWordbookModal">
+    <div class="kawaii-modal-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-family: var(--font-cute); font-size: 1.6rem; color: var(--coral-pink);">📚 새 단어장 등록 & CSV 업로드
+        </h3>
+        <button class="btn-icon-kawaii" id="closeUploadModalBtn" style="width: 32px; height: 32px;">✕</button>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div>
+          <label
+            style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">단어장
+            이름 <span style="color:var(--coral-pink)">*</span></label>
+          <input type="text" id="newBookTitle" class="cozy-text-input" style="height: 42px; font-size: 0.95rem;"
+            placeholder="예: 수능 2000 핵심 단어">
+        </div>
+
+        <div>
+          <label
+            style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">단어장
+            설명</label>
+          <input type="text" id="newBookDesc" class="cozy-text-input" style="height: 42px; font-size: 0.95rem;"
+            placeholder="예: 2026 수능 대비 기출 필수 어휘집">
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <div style="flex: 1;">
+            <label
+              style="font-size: 0.82rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">하루 신규 목표 수</label>
+            <input type="number" id="newBookTargetNew" class="cozy-text-input" style="height: 42px; font-size: 0.95rem;"
+              value="10" min="1" max="100">
+          </div>
+          <div style="flex: 1;">
+            <label
+              style="font-size: 0.82rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">하루 복습 목표 수</label>
+            <input type="number" id="newBookTargetReview" class="cozy-text-input" style="height: 42px; font-size: 0.95rem;"
+              value="20" min="1" max="200">
+          </div>
+        </div>
+
+        <div>
+          <label
+            style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">CSV
+            단어 파일 선택 (.csv)</label>
+          <input type="file" id="csvFileInput" accept=".csv" class="cozy-text-input"
+            style="height: 42px; font-size: 0.85rem; padding: 6px;">
+          <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 4px;">
+            💡 권장 헤더: <code>unit, word, meaning, pronunciation, example_1, example_1_trans, example_2, example_2_trans</code>
+          </div>
+        </div>
+
+        <div id="uploadStatusAlert" class="connection-alert" style="display: none;"></div>
+
+        <div style="display: flex; gap: 10px; margin-top: 6px;">
+          <button class="btn-kawaii-secondary" id="btnCancelUpload" style="flex: 1;">취소</button>
+          <button class="btn-kawaii-primary" id="btnSubmitWordbook" style="flex: 2;">단어장 등록하기 🌸</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. 단어장 안전 삭제 및 취약 단어 보존 모달 -->
+  <div class="kawaii-modal-backdrop" id="safeDeleteModal">
+    <div class="kawaii-modal-card">
+      <h3 style="font-family: var(--font-cute); font-size: 1.6rem; color: #FF4757; margin-bottom: 12px;">⚠️ 단어장 삭제 및 취약
+        단어 보호</h3>
+      <p style="font-size: 0.95rem; color: var(--text-body); line-height: 1.5; margin-bottom: 16px;" id="safeDeleteMsg">
+        이 단어장에는 오답이 반복된 <strong>취약 단어 4개</strong>가 포함되어 있습니다. 단어장을 삭제하시겠습니까?
+      </p>
+
+      <div
+        style="background: var(--honey-lemon-soft); border: 1.5px solid var(--honey-lemon); border-radius: var(--radius-sm); padding: 12px; font-size: 0.85rem; color: var(--text-body); margin-bottom: 16px;">
+        💡 <strong>보존 추천</strong>: 취약 단어는 <strong>'💖 취약 단어 보존함'</strong>으로 안전하게 이관되며, 에빙하우스 복습 일정과 성적 기록이 영구 보존됩니다.
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <button class="btn-kawaii-primary" id="btnConfirmPreserveDelete">취약 단어 보존 단어장으로 이동 후 삭제 (권장)</button>
+        <button class="btn-kawaii-secondary" id="btnCancelDelete">취소하고 단어장 유지</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JS 파일 로드 -->
+  <script src="supabase_config.js"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>
