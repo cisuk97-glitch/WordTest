@@ -70,7 +70,7 @@
         </div>
         <div class="stat-sticker lavender">
           <span class="stat-label">오늘 복습</span>
-          <span class="stat-val" id="statTodayReview">0 / 20</span>
+          <span class="stat-val" id="statTodayReview">0 / 0</span>
         </div>
         <div class="stat-sticker mint">
           <span class="stat-label">완료율</span>
@@ -455,18 +455,12 @@
         <!-- 🎯 일일 학습 목표 설정 섹션 -->
         <div style="border-top: 1px dashed var(--border-soft); padding-top: 12px; margin-top: 2px;">
           <div style="font-weight: 800; font-size: 0.95rem; color: var(--text-main); margin-bottom: 8px;">🎯 일일 학습 목표 설정</div>
-          <div style="display: flex; gap: 10px;">
-            <div style="flex: 1;">
-              <label style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">새로운 단어 목표 (개)</label>
-              <input type="number" id="cfgTargetNew" class="cozy-text-input" style="height: 40px; font-size: 0.95rem;" min="1" max="100" value="10">
-            </div>
-            <div style="flex: 1;">
-              <label style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">복습 단어 목표 (개)</label>
-              <input type="number" id="cfgTargetReview" class="cozy-text-input" style="height: 40px; font-size: 0.95rem;" min="1" max="200" value="20">
-            </div>
+          <div>
+            <label style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">새로운 단어 목표 (개)</label>
+            <input type="number" id="cfgTargetNew" class="cozy-text-input" style="height: 40px; font-size: 0.95rem;" min="1" max="100" value="10">
           </div>
           <div style="font-size: 0.76rem; color: var(--text-muted); margin-top: 6px;">
-            💡 설정된 목표 합계에 맞춰 오늘 학습 큐와 상단바 진도율이 자동 갱신됩니다.
+            💡 복습 단어 수는 에빙하우스 망각곡선 일정에 따라 매일 자동 계산됩니다.
           </div>
         </div>
 
@@ -506,19 +500,11 @@
             placeholder="예: 2026 수능 대비 기출 필수 어휘집">
         </div>
 
-        <div style="display: flex; gap: 10px;">
-          <div style="flex: 1;">
-            <label
-              style="font-size: 0.82rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">하루 신규 목표 수</label>
-            <input type="number" id="newBookTargetNew" class="cozy-text-input" style="height: 42px; font-size: 0.95rem;"
-              value="10" min="1" max="100">
-          </div>
-          <div style="flex: 1;">
-            <label
-              style="font-size: 0.82rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">하루 복습 목표 수</label>
-            <input type="number" id="newBookTargetReview" class="cozy-text-input" style="height: 42px; font-size: 0.95rem;"
-              value="20" min="1" max="200">
-          </div>
+        <div>
+          <label
+            style="font-size: 0.82rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">하루 신규 학습 목표 수</label>
+          <input type="number" id="newBookTargetNew" class="cozy-text-input" style="height: 42px; font-size: 0.95rem;"
+            value="10" min="1" max="100">
         </div>
 
         <div>
