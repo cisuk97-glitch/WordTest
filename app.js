@@ -8,10 +8,9 @@ const AppState = {
   currentView: "study",
   wordbooks: [],
   activeWordbookId: null,
-  // 일일 학습 목표 설정 (신규 / 복습 분리)
+  // 일일 학습 목표 설정 (신규 학습량)
   settings: {
-    targetNewWords: 10,
-    targetReviewWords: 20
+    targetNewWords: 10
   },
   words: [],
   // 단어별 에빙하우스 진도 (wordId -> progress 객체)
@@ -76,7 +75,6 @@ function loadLocalState() {
     try {
       const g = JSON.parse(savedGoals);
       if (g.targetNewWords) AppState.settings.targetNewWords = Number(g.targetNewWords);
-      if (g.targetReviewWords) AppState.settings.targetReviewWords = Number(g.targetReviewWords);
     } catch(e) {}
   }
 
@@ -422,11 +420,15 @@ function updateSidebarStats() {
 
   const accuracy = totalTests > 0 ? Math.round((totalCorrect / totalTests) * 100) : 0;
 
+  // 오늘 총 복습 대상 = 오늘 이미 완료한 복습 + 현재 복습 차례인 단어
+  const totalReviewTarget = completedReview + todayReview;
+  const targetNew = AppState.settings.targetNewWords || 10;
+
   // 좌측 서랍 스티커: 진행수 / 목표수 형태
   const statTodayNewEl = document.getElementById("statTodayNew");
   const statTodayReviewEl = document.getElementById("statTodayReview");
-  if (statTodayNewEl) statTodayNewEl.textContent = `${completedNew} / ${AppState.settings.targetNewWords}`;
-  if (statTodayReviewEl) statTodayReviewEl.textContent = `${completedReview} / ${AppState.settings.targetReviewWords}`;
+  if (statTodayNewEl) statTodayNewEl.textContent = `${completedNew} / ${targetNew}`;
+  if (statTodayReviewEl) statTodayReviewEl.textContent = `${completedReview} / ${totalReviewTarget}`;
 
   const statAccEl = document.getElementById("statAccuracy");
   if (statAccEl) statAccEl.textContent = `${accuracy}%`;
@@ -434,7 +436,7 @@ function updateSidebarStats() {
   if (statVulEl) statVulEl.textContent = vulnerableCount;
 
   // 상단 네비게이션 바 진도율: 오늘 학습 단어수의 총합계
-  const totalTarget = AppState.settings.targetNewWords + AppState.settings.targetReviewWords;
+  const totalTarget = targetNew + totalReviewTarget;
   const totalCompleted = completedNew + completedReview;
   const pct = totalTarget > 0 ? Math.min(100, Math.round((totalCompleted / totalTarget) * 100)) : 0;
 
@@ -445,7 +447,7 @@ function updateSidebarStats() {
   if (progressFill) progressFill.style.width = `${pct}%`;
   if (progressText) progressText.textContent = `${totalCompleted}/${totalTarget}`;
   if (progressPill) {
-    progressPill.title = `오늘의 진도: ${totalCompleted}/${totalTarget} (신규 ${completedNew}/${AppState.settings.targetNewWords} · 복습 ${completedReview}/${AppState.settings.targetReviewWords}) - 클릭하여 목표 변경`;
+    progressPill.title = `오늘의 진도: ${totalCompleted}/${totalTarget} (신규 ${completedNew}/${targetNew} · 복습 ${completedReview}/${totalReviewTarget}) - 클릭하여 목표 변경`;
   }
 }
  
@@ -540,19 +542,9 @@ function getTodayStudyWords() {
     return prog && prog.review_stage > 0 && prog.next_review_at && new Date(prog.next_review_at) <= now;
   });
 
-  const baseTargetNew = AppState.settings.targetNewWords || 10;
-  const baseTargetReview = AppState.settings.targetReviewWords || 20;
-
-  let targetNewCount = baseTargetNew;
-  let targetReviewCount = baseTargetReview;
-
-  if (allReviewWords.length === 0) {
-    targetReviewCount = 0;
-    targetNewCount = baseTargetNew + 10;
-  }
-
+  const targetNewCount = AppState.settings.targetNewWords || 10;
   const todayNewWords = allNewWords.slice(0, targetNewCount);
-  const todayReviewWords = allReviewWords.slice(0, targetReviewCount);
+  const todayReviewWords = allReviewWords; // 망각곡선 도래 단어 전량 포함
   const todayWords = [...todayNewWords, ...todayReviewWords];
 
   return {
@@ -1421,9 +1413,7 @@ function initUploadModal() {
       document.getElementById("newBookTitle").value = "";
       document.getElementById("newBookDesc").value = "";
       const targetNewEl = document.getElementById("newBookTargetNew");
-      const targetRevEl = document.getElementById("newBookTargetReview");
       if (targetNewEl) targetNewEl.value = "10";
-      if (targetRevEl) targetRevEl.value = "20";
       if (alertBox) alertBox.style.display = "none";
       modal.classList.add("active");
     });
@@ -1437,7 +1427,6 @@ function initUploadModal() {
       const title = document.getElementById("newBookTitle").value.trim();
       const desc = document.getElementById("newBookDesc").value.trim();
       const targetNew = parseInt(document.getElementById("newBookTargetNew")?.value) || 10;
-      const targetReview = parseInt(document.getElementById("newBookTargetReview")?.value) || 20;
       const fileInput = document.getElementById("csvFileInput");
 
       if (!title) {
@@ -1534,8 +1523,7 @@ function initUploadModal() {
           const { data: bData, error: bErr } = await sb.from("wordbooks").insert([{
             title: title,
             description: desc,
-            daily_new_target: targetNew,
-            daily_review_target: targetReview
+            daily_new_target: targetNew
           }]).select();
 
           if (bErr) throw bErr;
@@ -1557,7 +1545,6 @@ function initUploadModal() {
           title: title,
           description: desc,
           daily_new_target: targetNew,
-          daily_review_target: targetReview,
           is_vulnerable_archive: false
         };
         AppState.wordbooks.push(newBookObj);
@@ -1725,9 +1712,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("cfgSbKey").value = SUPABASE_CONFIG.getKey();
 
     const cfgNewEl = document.getElementById("cfgTargetNew");
-    const cfgRevEl = document.getElementById("cfgTargetReview");
     if (cfgNewEl) cfgNewEl.value = AppState.settings.targetNewWords || 10;
-    if (cfgRevEl) cfgRevEl.value = AppState.settings.targetReviewWords || 20;
 
     const alertBox = document.getElementById("sbConnectionAlert");
     if (alertBox) {
@@ -1770,14 +1755,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // 일일 학습 목표 저장
     const targetNew = parseInt(document.getElementById("cfgTargetNew")?.value) || 10;
-    const targetReview = parseInt(document.getElementById("cfgTargetReview")?.value) || 20;
     AppState.settings.targetNewWords = targetNew;
-    AppState.settings.targetReviewWords = targetReview;
 
     const activeBook = AppState.wordbooks.find(b => Number(b.id) === Number(AppState.activeWordbookId));
     if (activeBook) {
       activeBook.daily_new_target = targetNew;
-      activeBook.daily_review_target = targetReview;
     }
     saveLocalState();
     updateSidebarStats();
