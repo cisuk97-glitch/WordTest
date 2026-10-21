@@ -695,7 +695,6 @@ function renderCurrentTestQuestion() {
 
   const typeBadge = document.getElementById("testQuestionTypeBadge");
   const mainText = document.getElementById("testQuestionMain");
-  const hintText = document.getElementById("testQuestionHint");
   const inputEl = document.getElementById("testAnswerInput");
 
   inputEl.value = "";
@@ -704,14 +703,10 @@ function renderCurrentTestQuestion() {
   if (q.questionType === "kr_to_en") {
     typeBadge.textContent = "뜻 보고 영어 철자 입력하기";
     mainText.innerHTML = formatMeaningToHtml(w.meaning.split("\n")[0]);
-    const firstChar = w.word.charAt(0);
-    const blanks = " _".repeat(Math.max(1, w.word.length - 1));
-    hintText.textContent = `첫 글자 힌트: ${firstChar}${blanks} (${w.word.length}글자)`;
     inputEl.placeholder = "영어 단어를 입력하세요...";
   } else if (q.questionType === "en_to_kr") {
     typeBadge.textContent = "영어 단어 보고 한글 뜻 작성하기";
     mainText.textContent = w.word;
-    hintText.textContent = `발음: ${w.pronunciation || ""} (품사: ${w.pos || "단어"})`;
     inputEl.placeholder = "한글 뜻을 입력하세요...";
   } else if (q.questionType === "blank_sentence") {
     typeBadge.textContent = "예문 빈칸에 들어갈 영어 단어 채우기";
@@ -719,8 +714,21 @@ function renderCurrentTestQuestion() {
     const regex = new RegExp(`\\b${w.word}\\b`, "gi");
     const masked = (w.example_1 || "I remember that word.").replace(regex, "( ________ )");
     mainText.textContent = masked;
-    hintText.innerHTML = `해석: ${w.example_1_trans || formatMeaningToHtml(w.meaning)}`;
     inputEl.placeholder = "빈칸에 들어갈 영어 단어를 입력하세요...";
+  }
+
+  // 문제 텍스트 길이에 맞춰 한 줄로 보이도록 글씨 크기 자동 스케일링
+  const textLen = (mainText.textContent || "").trim().length;
+  if (textLen > 45) {
+    mainText.style.fontSize = "1.05rem";
+  } else if (textLen > 32) {
+    mainText.style.fontSize = "1.2rem";
+  } else if (textLen > 22) {
+    mainText.style.fontSize = "1.45rem";
+  } else if (textLen > 14) {
+    mainText.style.fontSize = "1.65rem";
+  } else {
+    mainText.style.fontSize = "1.85rem";
   }
 
   inputEl.focus();
