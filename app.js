@@ -662,19 +662,15 @@ function startSubjectiveTest() {
   session.elapsedSeconds = 0;
   session.startTime = Date.now();
 
-  // 복습 대상 단어 우선, 부족하면 전체에서 무작위 샘플링 (10문제)
-  const now = new Date();
-  let pool = AppState.words.filter(w => {
-    const prog = AppState.progressMap[w.id];
-    return prog?.is_vulnerable || (prog?.next_review_at && new Date(prog.next_review_at) <= now);
-  });
+  // 오늘의 학습 단어(todayWords) 추출, 없으면 전체 단어 fallback
+  const { todayWords } = getTodayStudyWords();
+  let pool = (todayWords && todayWords.length > 0) ? [...todayWords] : [...AppState.words];
 
-  if (pool.length < 10) {
-    const remaining = AppState.words.filter(w => !pool.includes(w));
-    pool = [...pool, ...remaining];
-  }
-  
-  session.questions = pool.slice(0, 10).map((w, idx) => {
+  // 무작위 셔플 (랜덤 순서 출제)
+  pool.sort(() => Math.random() - 0.5);
+
+  // 오늘의 학습 단어 수 전체를 테스트 문제로 구성
+  session.questions = pool.map((w, idx) => {
     // 3가지 주관식 유형 순환: 0=kr_to_en, 1=en_to_kr, 2=blank_sentence
     const types = ["kr_to_en", "en_to_kr", "blank_sentence"];
     const qType = types[idx % types.length];
