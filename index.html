@@ -176,71 +176,33 @@
       </section>
 
       <!-- ========================================================
-           VIEW 2: 주관식 단어 테스트 (test) - 키보드 & Apple Pencil 캔버스
+           VIEW 2: 주관식 단어 테스트 (test) - English3 스타일 한 페이지 일괄 시험
            ======================================================== -->
       <section id="view-test" class="view-section" style="display: none;">
-        <div class="test-arena-card">
-          <!-- 상단 진행 타이머 & 입력 모드 토글 -->
-          <div class="test-stepper-header">
-            <div class="test-timer-badge">
-              <span>⏱️</span>
-              <span id="testStopwatch">00:00</span>
-            </div>
-
-            <div style="font-weight: 800; color: var(--coral-pink);" id="testQuestionIndex">
-              문제 1 / 10
-            </div>
-
-            <!-- 입력 방식 토글 (키보드 vs Apple Pencil 손글씨) -->
-            <div class="mode-toggle-group">
-              <button class="btn-mode-toggle active" id="modeKeyboardBtn">⌨️ 키보드</button>
-              <button class="btn-mode-toggle" id="modePencilBtn">✏️ 손글씨(펜)</button>
-            </div>
-          </div>
-
-          <!-- 문제 제시 영역 -->
-          <div class="question-prompt-box">
-            <div class="q-type-label" id="testQuestionTypeBadge">한글 뜻 보고 영어 철자 입력하기</div>
-            <div class="q-main-text" id="testQuestionMain">외모, 겉모습; 출현</div>
-          </div>
-
-          <!-- A. 키보드 입력 필드 -->
-          <div class="keyboard-input-wrap" id="wrapKeyboardInput">
-            <input type="text" class="cozy-text-input" id="testAnswerInput" placeholder="영어 단어를 입력하고 Enter를 누르세요..."
-              autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-          </div>
-
-          <!-- B. Apple Pencil 캔버스 필기 패드 -->
-          <div class="canvas-station-wrap" id="wrapCanvasInput" style="display: none;">
-            <div class="canvas-toolbar">
-              <div class="canvas-tool-group">
-                <button class="btn-tool-kawaii active" id="penToolBtn">✏️ 연필</button>
-                <button class="btn-tool-kawaii" id="highlighterToolBtn">🖍️ 형광펜</button>
-                <button class="btn-tool-kawaii" id="eraserToolBtn">🧽 지우개</button>
+        <div class="test-arena-card test-page-card">
+          <!-- 상단 진행 타이머 & 진행 바 & 우측 완료 버튼 -->
+          <div class="test-page-header">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div class="test-timer-badge">
+                <span>⏱️</span>
+                <span id="testStopwatch">00:00</span>
               </div>
-              <div class="canvas-tool-group">
-                <button class="btn-tool-kawaii" id="canvasUndoBtn">↩️ 되돌리기</button>
-                <button class="btn-tool-kawaii" id="canvasClearBtn">🗑️ 전체지우기</button>
+
+              <div class="test-progress-wrap">
+                <div class="progress-bar-bg">
+                  <div class="progress-bar-fill" id="testProgressBar" style="width: 0%;"></div>
+                </div>
+                <span class="progress-counter" id="testProgressText">0 / 0</span>
               </div>
             </div>
 
-            <div class="pencil-canvas-container">
-              <canvas id="handwritingCanvas"></canvas>
-            </div>
-            <div style="font-size: 0.8rem; color: var(--text-muted); text-align: right;">
-              💡 Apple Pencil이나 손가락으로 자연스럽게 필기할 수 있습니다.
-            </div>
+            <!-- 우측 콤팩트 완료 버튼 -->
+            <button class="btn-submit-done" id="btnSubmitAll">완료</button>
           </div>
 
-          <!-- 주관식 답안 제출 버튼 -->
-          <div style="display: flex; gap: 12px; margin-top: 10px;">
-            <button class="btn-kawaii-secondary" id="testSkipBtn" style="flex: 1;">패스 ⏩</button>
-            <button class="btn-kawaii-primary" id="testSubmitBtn" style="flex: 2;">정답 제출 및 다음 문제 💖</button>
-          </div>
-
-          <!-- 참 잘했어요 스탬프 도장 오버레이 -->
-          <div class="stamp-overlay" id="testStampOverlay">
-            🌸 참 잘했어요!
+          <!-- Single Page Row-based Test Container -->
+          <div class="test-rows-container" id="testRowsContainer">
+            <!-- Dynamically rendered rows (Q1 ~ Qn) -->
           </div>
         </div>
       </section>

@@ -639,7 +639,6 @@ body::before {
   position: relative;
 }
 
-#view-test .test-arena-card,
 #view-wordbooks .test-arena-card,
 #view-stats .test-arena-card {
   height: 560px;
@@ -647,6 +646,275 @@ body::before {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+}
+
+#view-test .test-arena-card.test-page-card {
+  height: auto;
+  min-height: 580px;
+  max-height: calc(100vh - 150px);
+  max-width: 980px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 12px 18px 14px;
+  overflow: hidden;
+}
+
+.test-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px dashed var(--border-soft);
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.test-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.progress-bar-bg {
+  width: 130px;
+  height: 9px;
+  background: var(--bg-desk);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+}
+
+.progress-bar-fill {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--coral-pink), var(--baby-pink));
+  border-radius: var(--radius-full);
+  transition: width 0.25s ease;
+}
+
+.progress-counter {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--coral-pink);
+  font-family: var(--font-en);
+  min-width: 45px;
+  text-align: right;
+}
+
+/* Single Page 2-Column Row-based Test Layout (좌/우 2단 배치) */
+.test-rows-container {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 12px;
+  align-content: start;
+  padding-right: 6px;
+  margin-bottom: 0;
+}
+
+.test-rows-container::-webkit-scrollbar {
+  width: 6px;
+}
+.test-rows-container::-webkit-scrollbar-track {
+  background: var(--bg-desk);
+  border-radius: 4px;
+}
+.test-rows-container::-webkit-scrollbar-thumb {
+  background: var(--border-soft);
+  border-radius: 4px;
+}
+.test-rows-container::-webkit-scrollbar-thumb:hover {
+  background: var(--coral-pink);
+}
+
+.test-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-soft);
+  border-radius: var(--radius-xs);
+  padding: 6px 10px;
+  transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
+}
+
+.test-row:hover {
+  border-color: var(--baby-pink);
+  background: var(--baby-pink-soft);
+}
+
+.test-row.answered {
+  border-color: var(--coral-pink);
+  background: var(--bg-card-alt);
+}
+
+.test-row-num {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--coral-pink);
+  background: var(--baby-pink-soft);
+  padding: 2px 7px;
+  border-radius: 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-family: var(--font-en);
+}
+
+.test-row-prompt {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: var(--text-main);
+  font-family: var(--font-en);
+}
+
+.test-prompt-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.test-prompt-badge {
+  display: none; /* 2단 레이아웃 가로 공간 확보를 위해 숨김 */
+}
+
+.test-row-input-wrap {
+  flex-shrink: 0;
+  width: 175px;
+  display: flex;
+  flex-direction: column;
+}
+
+.test-row-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1.5px solid var(--border-soft);
+  border-radius: 6px;
+  font-size: 0.84rem;
+  color: var(--text-main);
+  outline: none;
+  font-family: var(--font-kr);
+  background: #FFFFFF;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.test-row-input:focus {
+  border-color: var(--coral-pink);
+  box-shadow: 0 0 0 2.5px rgba(255, 142, 158, 0.2);
+}
+
+/* 시험 채점 결과 인라인 피드백 */
+.test-row.row-correct {
+  border-color: #208B67;
+  background: #F0FDF4;
+}
+
+.test-row.row-correct .test-row-input {
+  border-color: #208B67;
+  background: #FFFFFF;
+  color: #065F46;
+  font-weight: 700;
+}
+
+.test-row.row-wrong {
+  border-color: #FF4757;
+  background: #FFF5F5;
+}
+
+.test-row.row-wrong .test-row-input {
+  border-color: #FF4757;
+  background: #FFFFFF;
+  color: #C53030;
+  text-decoration: line-through;
+}
+
+.wrong-answer-hint {
+  font-size: 0.72rem;
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.wrong-answer-hint .hint-label {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #C53030;
+  background: #FED7D7;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.wrong-answer-hint .hint-val {
+  color: #2B6CB0;
+  font-weight: 700;
+}
+
+.row-status-badge {
+  font-size: 0.72rem;
+  font-weight: 800;
+  margin-top: 2px;
+  display: inline-block;
+}
+
+.row-status-badge.badge-correct {
+  color: #208B67;
+}
+
+.btn-submit-done {
+  background: linear-gradient(135deg, var(--coral-pink) 0%, var(--coral-pink-hover) 100%);
+  color: #FFFFFF;
+  border: none;
+  padding: 6px 18px;
+  border-radius: var(--radius-full);
+  font-size: 0.88rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(255, 142, 158, 0.35);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  font-family: var(--font-cute);
+}
+
+.btn-submit-done:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 142, 158, 0.45);
+}
+
+.btn-submit-done:active {
+  transform: scale(0.96);
+}
+
+@media (max-width: 768px) {
+  #view-test .test-arena-card.test-page-card {
+    padding: 12px 12px;
+    max-height: calc(100vh - 120px);
+  }
+  .test-rows-container {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+  .test-row {
+    gap: 6px;
+    padding: 6px 8px;
+  }
+  .test-row-prompt {
+    font-size: 0.88rem;
+  }
+  .test-row-input-wrap {
+    width: 135px;
+  }
+  .test-row-input {
+    font-size: 0.8rem;
+    padding: 5px 6px;
+  }
 }
 
 #wordbooksListContainer {

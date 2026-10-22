@@ -639,7 +639,160 @@ function speakWord(word) {
 }
 
 // ============================================================================
-// 주관식 단어 테스트 엔진 (Keyboard + Apple Pencil)
+// 스마트 채점 알고리즘 엔진 (English3 이식)
+// 한글 자모 분해, 편집거리 85% 유사도 오타 참작, 복수 뜻 인정
+// ============================================================================
+const CHOSUNG = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+const JUNGSUNG = ['ㅏ','ㅐ','ㅑ','ㅒ','ㅓ','ㅔ','ㅕ','ㅖ','ㅗ','ㅘ','ㅙ','ㅚ','ㅛ','ㅜ','ㅝ','ㅞ','ㅟ','ㅠ','ㅡ','ㅢ','ㅣ'];
+const JONGSUNG = ['','ㄱ','ㄲ','ㄳ','ㄴ','ㄵ','ㄶ','ㄷ','ㄹ','ㄺ','ㄻ','ㄼ','ㄽ','ㄾ','ㄿ','ㅀ','ㅁ','ㅂ','ㅄ','ㅅ','ㅆ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+
+function decomposeHangul(text) {
+  if (!text) return '';
+  const result = [];
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code >= 0xAC00 && code <= 0xD7A3) {
+      const sIndex = code - 0xAC00;
+      const cho = Math.floor(sIndex / 588);
+      const jung = Math.floor((sIndex % 588) / 28);
+      const jong = sIndex % 28;
+      result.push(CHOSUNG[cho]);
+      result.push(JUNGSUNG[jung]);
+      if (jong > 0) {
+        result.push(JONGSUNG[jong]);
+      }
+    } else {
+      result.push(text[i]);
+    }
+  }
+  return result.join('');
+}
+
+function levenshteinDistance(s1, s2) {
+  if (s1 === s2) return 0;
+  if (!s1 || s1.length === 0) return (s2 || '').length;
+  if (!s2 || s2.length === 0) return (s1 || '').length;
+
+  const len1 = s1.length;
+  const len2 = s2.length;
+  const d = [];
+
+  for (let i = 0; i <= len1; i++) d[i] = [i];
+  for (let j = 0; j <= len2; j++) d[0][j] = j;
+
+  for (let i = 1; i <= len1; i++) {
+    for (let j = 1; j <= len2; j++) {
+      const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(
+        d[i - 1][j] + 1,
+        d[i][j - 1] + 1,
+        d[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return d[len1][len2];
+}
+
+function cleanText(text) {
+  if (!text) return '';
+  return text.toLowerCase()
+    .replace(/\[[^\]]*\]/g, '') // 품사 태그 [명], [동] 등 제거
+    .replace(/[0-9]+\./g, '')   // 1., 2. 번호 제거
+    .replace(/[\s~·,/()[\]\-_\'".!?~;:+]/g, '');
+}
+
+function gradeAnswer(userInput, targetAnswer, isEnglish = false) {
+  const uClean = cleanText(userInput);
+  const tClean = cleanText(targetAnswer);
+
+  if (!uClean) {
+    return { isCorrect: false, isTypo: false, notice: '', matchedAnswer: targetAnswer };
+  }
+
+  // 1. 단순 완전 일치
+  if (uClean === tClean) {
+    return { isCorrect: true, isTypo: false, notice: '', matchedAnswer: targetAnswer };
+  }
+
+  // 2. 영단어 채점 모드
+  if (isEnglish) {
+    const dist = levenshteinDistance(uClean, tClean);
+    if ((tClean.length >= 5 && dist <= 1) || (tClean.length >= 8 && dist <= 2)) {
+      return {
+        isCorrect: true,
+        isTypo: true,
+        notice: `💡 살짝 오타: 원래 표기는 '${targetAnswer}'`,
+        matchedAnswer: targetAnswer
+      };
+    }
+    return { isCorrect: false, isTypo: false, notice: '', matchedAnswer: targetAnswer };
+  }
+
+  // 3. 한글 뜻 채점 모드 (복수 뜻 분할 및 오타 참작)
+  const rawCandidates = targetAnswer
+    .replace(/\[[^\]]*\]/g, '')
+    .split(/[,/·;\n]/)
+    .map(c => c.trim())
+    .filter(Boolean);
+  
+  const candidateList = rawCandidates.length > 0 ? rawCandidates : [targetAnswer];
+
+  for (const cand of candidateList) {
+    const cClean = cleanText(cand);
+    if (!cClean) continue;
+
+    // 3-1. 후보 뜻과 완전 일치
+    if (uClean === cClean) {
+      return { isCorrect: true, isTypo: false, notice: '', matchedAnswer: cand };
+    }
+
+    // 3-2. 동사 어근 일치 ('시작하다' <-> '시작', '강조하다' <-> '강조')
+    if (cClean.endsWith('하다') && uClean === cClean.slice(0, -2)) {
+      return { isCorrect: true, isTypo: false, notice: '', matchedAnswer: cand };
+    }
+    if (uClean.endsWith('하다') && cClean === uClean.slice(0, -2)) {
+      return { isCorrect: true, isTypo: false, notice: '', matchedAnswer: cand };
+    }
+
+    // 3-3. 접미사 '~시키다', '~되다' 대응
+    if ((cClean.endsWith('시키다') || cClean.endsWith('되다')) && uClean === cClean.slice(0, -3)) {
+      return { isCorrect: true, isTypo: false, notice: '', matchedAnswer: cand };
+    }
+    if ((uClean.endsWith('시키다') || uClean.endsWith('되다')) && cClean === uClean.slice(0, -3)) {
+      return { isCorrect: true, isTypo: false, notice: '', matchedAnswer: cand };
+    }
+
+    // 3-4. 부분 일치 (2글자 이상 정확한 서브스트링)
+    if (cClean.length >= 2 && uClean.length >= 2) {
+      if (cClean.startsWith(uClean) && uClean.length >= cClean.length * 0.7) {
+        return { isCorrect: true, isTypo: false, notice: '', matchedAnswer: cand };
+      }
+    }
+
+    // 3-5. 한글 자모 분해 후 Levenshtein 편집거리 유사도 85% 이상 판별
+    const uJamo = decomposeHangul(uClean);
+    const cJamo = decomposeHangul(cClean);
+    const jDist = levenshteinDistance(uJamo, cJamo);
+    const maxLen = Math.max(uJamo.length, cJamo.length);
+
+    if (maxLen > 0) {
+      const similarity = 1.0 - (jDist / maxLen);
+      if (similarity >= 0.85) {
+        return {
+          isCorrect: true,
+          isTypo: true,
+          notice: `💡 살짝 오타: 원래 표기는 '${cand}'`,
+          matchedAnswer: cand
+        };
+      }
+    }
+  }
+
+  return { isCorrect: false, isTypo: false, notice: '', matchedAnswer: targetAnswer };
+}
+
+// ============================================================================
+// 주관식 단어 테스트 엔진 (Row-based Single Page Test)
 // ============================================================================
 function startSubjectiveTest() {
   if (!AppState.words || AppState.words.length === 0) {
@@ -651,6 +804,7 @@ function startSubjectiveTest() {
   session.sessionId = "session_" + Date.now();
   session.currentIndex = 0;
   session.results = [];
+  session.userAnswers = {};
   session.elapsedSeconds = 0;
   session.startTime = Date.now();
 
@@ -661,133 +815,198 @@ function startSubjectiveTest() {
   // 무작위 셔플 (랜덤 순서 출제)
   pool.sort(() => Math.random() - 0.5);
 
-  // 오늘의 학습 단어 수 전체를 테스트 문제로 구성
-  session.questions = pool.map((w, idx) => {
-    // 3가지 주관식 유형 순환: 0=kr_to_en, 1=en_to_kr, 2=blank_sentence
-    const types = ["kr_to_en", "en_to_kr", "blank_sentence"];
-    const qType = types[idx % types.length];
-    return { word: w, questionType: qType };
-  });
+  // 영어 단어 보고 한글 뜻 작성하기 단일 유형(en_to_kr)으로 전 문제 구성
+  session.questions = pool.map((w, idx) => ({
+    index: idx + 1,
+    word: w,
+    questionType: "en_to_kr",
+    prompt: w.word,
+    targetAnswer: w.meaning
+  }));
 
   // 스톱워치 가동
   if (session.timerInterval) clearInterval(session.timerInterval);
+  const stopwatchEl = document.getElementById("testStopwatch");
+  if (stopwatchEl) stopwatchEl.textContent = "00:00";
+
   session.timerInterval = setInterval(() => {
     session.elapsedSeconds++;
     const m = String(Math.floor(session.elapsedSeconds / 60)).padStart(2, "0");
     const s = String(session.elapsedSeconds % 60).padStart(2, "0");
-    document.getElementById("testStopwatch").textContent = `${m}:${s}`;
+    if (stopwatchEl) stopwatchEl.textContent = `${m}:${s}`;
   }, 1000);
 
-  renderCurrentTestQuestion();
+  renderTestQuestions();
 }
 
-function renderCurrentTestQuestion() {
+function renderTestQuestions() {
   const session = AppState.testSession;
-  if (session.currentIndex >= session.questions.length) {
-    finishSubjectiveTest();
-    return;
+  const container = document.getElementById("testRowsContainer");
+  if (!container) return;
+  container.innerHTML = "";
+
+  session.questions.forEach((q, idx) => {
+    const row = document.createElement("div");
+    const existingVal = session.userAnswers[idx] || "";
+    row.className = `test-row ${existingVal.trim() ? "answered" : ""}`;
+    row.dataset.rowIdx = idx;
+
+    row.innerHTML = `
+      <span class="test-row-num">Q${q.index}</span>
+      <div class="test-row-prompt">
+        <span class="test-prompt-text" title="${q.prompt}">${q.prompt}</span>
+        <span class="test-prompt-badge">🇺🇸 ➔ 🇰🇷</span>
+      </div>
+      <div class="test-row-input-wrap">
+        <input type="text" class="test-row-input subjective-input" 
+          data-qidx="${idx}" 
+          placeholder="한글 뜻 입력..." 
+          value="${existingVal}"
+          autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      </div>
+    `;
+
+    const inputEl = row.querySelector(".test-row-input");
+
+    inputEl.addEventListener("input", (e) => {
+      const val = e.target.value;
+      session.userAnswers[idx] = val;
+      row.classList.toggle("answered", Boolean(val.trim()));
+      updateTestProgress();
+    });
+
+    // Enter 키 입력 시 다음 번호 입력창으로 자동 포커스 이동
+    inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const nextInput = container.querySelector(`.test-row-input[data-qidx="${idx + 1}"]`);
+        if (nextInput) {
+          nextInput.focus();
+        } else {
+          inputEl.blur();
+        }
+      }
+    });
+
+    container.appendChild(row);
+  });
+
+  updateTestProgress();
+
+  // 첫 번째 문제 입력창으로 자동 포커스
+  const firstInput = container.querySelector('.test-row-input[data-qidx="0"]');
+  if (firstInput) {
+    setTimeout(() => firstInput.focus(), 100);
   }
-
-  const q = session.questions[session.currentIndex];
-  const w = q.word;
-
-  document.getElementById("testQuestionIndex").textContent = `문제 ${session.currentIndex + 1} / ${session.questions.length}`;
-
-  const typeBadge = document.getElementById("testQuestionTypeBadge");
-  const mainText = document.getElementById("testQuestionMain");
-  const inputEl = document.getElementById("testAnswerInput");
-
-  inputEl.value = "";
-  clearCanvas();
-
-  if (q.questionType === "kr_to_en") {
-    typeBadge.textContent = "뜻 보고 영어 철자 입력하기";
-    mainText.innerHTML = formatMeaningToHtml(w.meaning.split("\n")[0]);
-    inputEl.placeholder = "영어 단어를 입력하세요...";
-  } else if (q.questionType === "en_to_kr") {
-    typeBadge.textContent = "영어 단어 보고 한글 뜻 작성하기";
-    mainText.textContent = w.word;
-    inputEl.placeholder = "한글 뜻을 입력하세요...";
-  } else if (q.questionType === "blank_sentence") {
-    typeBadge.textContent = "예문 빈칸에 들어갈 영어 단어 채우기";
-    // 예문 속 단어를 빈칸으로 마스킹
-    const regex = new RegExp(`\\b${w.word}\\b`, "gi");
-    const masked = (w.example_1 || "I remember that word.").replace(regex, "( ________ )");
-    mainText.textContent = masked;
-    inputEl.placeholder = "빈칸에 들어갈 영어 단어를 입력하세요...";
-  }
-
-  // 문제 텍스트 길이에 맞춰 한 줄로 보이도록 글씨 크기 자동 스케일링
-  const textLen = (mainText.textContent || "").trim().length;
-  if (textLen > 45) {
-    mainText.style.fontSize = "1.05rem";
-  } else if (textLen > 32) {
-    mainText.style.fontSize = "1.2rem";
-  } else if (textLen > 22) {
-    mainText.style.fontSize = "1.45rem";
-  } else if (textLen > 14) {
-    mainText.style.fontSize = "1.65rem";
-  } else {
-    mainText.style.fontSize = "1.85rem";
-  }
-
-  inputEl.focus();
 }
 
-function submitCurrentAnswer(skipped = false) {
+function updateTestProgress() {
   const session = AppState.testSession;
-  const q = session.questions[session.currentIndex];
-  const w = q.word;
-  const inputEl = document.getElementById("testAnswerInput");
-  const userAnswer = skipped ? "" : inputEl.value.trim();
+  if (!session.questions || session.questions.length === 0) return;
+  const answeredCount = Object.values(session.userAnswers || {}).filter(v => v && v.trim()).length;
+  const total = session.questions.length;
+  const pct = total > 0 ? Math.round((answeredCount / total) * 100) : 0;
 
-  let isCorrect = false;
-  if (!skipped) {
-    if (q.questionType === "kr_to_en" || q.questionType === "blank_sentence") {
-      isCorrect = userAnswer.toLowerCase() === w.word.toLowerCase();
-    } else {
-      // en_to_kr (한글 뜻)의 경우 주요 핵심어 포함 여부 검사
-      const cleanMeaning = w.meaning.replace(/[0-9\.\,\;\s\[\]]/g, "");
-      const cleanAns = userAnswer.replace(/[\s]/g, "");
-      isCorrect = cleanMeaning.includes(cleanAns) && cleanAns.length >= 1;
+  const bar = document.getElementById("testProgressBar");
+  const text = document.getElementById("testProgressText");
+  if (bar) bar.style.width = `${pct}%`;
+  if (text) text.textContent = `${answeredCount} / ${total}`;
+}
+
+async function submitAndGradeTest() {
+  const session = AppState.testSession;
+  const total = session.questions.length;
+  if (total === 0) return;
+
+  const answeredCount = Object.values(session.userAnswers || {}).filter(v => v && v.trim()).length;
+  if (answeredCount < total) {
+    if (!confirm(`아직 작성하지 않은 문제가 있어요! (${answeredCount}/${total}문제 작성됨)\n이대로 채점할까요?`)) {
+      return;
     }
   }
 
-  // 스탬프 도장 애니메이션
-  showStampOverlay(isCorrect);
+  // 타이머 정지
+  if (session.timerInterval) {
+    clearInterval(session.timerInterval);
+    session.timerInterval = null;
+  }
 
-  // 에빙하우스 간격 업데이트
-  updateEbbinghausProgress(w.id, isCorrect, 1000, q.questionType, userAnswer);
+  let correctCount = 0;
+  session.results = [];
 
-  session.results.push({
-    word: w,
-    questionType: q.questionType,
-    userAnswer,
-    isCorrect,
-    correctAnswer: q.questionType === "en_to_kr" ? w.meaning : w.word
+  const testContainer = document.getElementById("testRowsContainer");
+
+  session.questions.forEach((q, idx) => {
+    const userAns = (session.userAnswers[idx] || "").trim();
+    const w = q.word;
+    const targetMeaning = w.meaning;
+
+    // 스마트 채점 엔진 호출
+    const gradeResult = gradeAnswer(userAns, targetMeaning, false);
+    const isCorrect = gradeResult.isCorrect;
+
+    if (isCorrect) {
+      correctCount++;
+    }
+
+    // 에빙하우스 간격 업데이트
+    updateEbbinghausProgress(w.id, isCorrect, 1000, "en_to_kr", userAns);
+
+    session.results.push({
+      word: w,
+      questionType: "en_to_kr",
+      userAnswer: userAns,
+      isCorrect,
+      correctAnswer: targetMeaning,
+      isTypo: gradeResult.isTypo,
+      notice: gradeResult.notice
+    });
+
+    // 인라인 시험지 시각 피드백
+    if (testContainer) {
+      const row = testContainer.querySelector(`.test-row[data-row-idx="${idx}"]`);
+      if (row) {
+        row.classList.remove("row-correct", "row-wrong");
+        row.querySelectorAll(".wrong-answer-hint, .row-status-badge").forEach(el => el.remove());
+
+        const inputWrap = row.querySelector(".test-row-input-wrap");
+        if (isCorrect) {
+          row.classList.add("row-correct");
+          if (inputWrap) {
+            const badge = document.createElement("span");
+            badge.className = "row-status-badge badge-correct";
+            badge.textContent = gradeResult.isTypo ? "💡 오타 참작 정답!" : "✅ 정답";
+            inputWrap.appendChild(badge);
+          }
+        } else {
+          row.classList.add("row-wrong");
+          if (inputWrap) {
+            const hint = document.createElement("div");
+            hint.className = "wrong-answer-hint";
+            const firstMeaning = targetMeaning.replace(/\[[^\]]*\]/g, "").trim().split(/[,/;\n]/)[0];
+            hint.innerHTML = `<span class="hint-label">정답</span> <span class="hint-val">${firstMeaning}</span>`;
+            inputWrap.appendChild(hint);
+          }
+        }
+      }
+    }
   });
 
-  setTimeout(() => {
-    session.currentIndex++;
-    renderCurrentTestQuestion();
-  }, 700);
-}
-
-function showStampOverlay(isCorrect) {
-  const stamp = document.getElementById("testStampOverlay");
-  if (isCorrect) {
-    stamp.textContent = "🌸 참 잘했어요!";
-    stamp.style.borderColor = "#FF4757";
-    stamp.style.color = "#FF4757";
-  } else {
-    stamp.textContent = "🧸 다시 외우기!";
-    stamp.style.borderColor = "var(--coral-pink)";
-    stamp.style.color = "var(--coral-pink)";
+  // 버튼 상태 변경
+  const submitBtn = document.getElementById("btnSubmitAll");
+  if (submitBtn) {
+    submitBtn.textContent = "채점 중...";
+    submitBtn.disabled = true;
   }
-  stamp.classList.add("show-stamp");
+
+  // 1.2초 후 결과 다이어리 화면으로 이동
   setTimeout(() => {
-    stamp.classList.remove("show-stamp");
-  }, 600);
+    if (submitBtn) {
+      submitBtn.textContent = "완료";
+      submitBtn.disabled = false;
+    }
+    finishSubjectiveTest();
+  }, 1200);
 }
 
 async function finishSubjectiveTest() {
@@ -1652,56 +1871,41 @@ document.addEventListener("DOMContentLoaded", () => {
     updateSidebarStats();
   });
 
-  // 주관식 테스트 입력 모드 토글 (키보드 vs 손글씨)
-  const modeKeyboardBtn = document.getElementById("modeKeyboardBtn");
-  const modePencilBtn = document.getElementById("modePencilBtn");
-  const wrapKeyboard = document.getElementById("wrapKeyboardInput");
-  const wrapCanvas = document.getElementById("wrapCanvasInput");
+  // 주관식 단어 테스트 일괄 채점 버튼
+  const btnSubmitAll = document.getElementById("btnSubmitAll");
+  if (btnSubmitAll) {
+    btnSubmitAll.addEventListener("click", submitAndGradeTest);
+  }
 
-  modeKeyboardBtn.addEventListener("click", () => {
-    modeKeyboardBtn.classList.add("active");
-    modePencilBtn.classList.remove("active");
-    wrapKeyboard.style.display = "block";
-    wrapCanvas.style.display = "none";
-    document.getElementById("testAnswerInput").focus();
-  });
-
-  modePencilBtn.addEventListener("click", () => {
-    modePencilBtn.classList.add("active");
-    modeKeyboardBtn.classList.remove("active");
-    wrapKeyboard.style.display = "none";
-    wrapCanvas.style.display = "block";
-    clearCanvas();
-  });
-
-  // 키보드 엔터 제출
-  document.getElementById("testAnswerInput").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      submitCurrentAnswer(false);
-    }
-  });
-
-  document.getElementById("testSubmitBtn").addEventListener("click", () => submitCurrentAnswer(false));
-  document.getElementById("testSkipBtn").addEventListener("click", () => submitCurrentAnswer(true));
-
-  // 캔버스 툴 버튼
-  document.getElementById("penToolBtn").addEventListener("click", function() {
-    AppState.canvasTool = "pen";
-    document.querySelectorAll(".canvas-toolbar .btn-tool-kawaii").forEach(b => b.classList.remove("active"));
-    this.classList.add("active");
-  });
-  document.getElementById("highlighterToolBtn").addEventListener("click", function() {
-    AppState.canvasTool = "highlighter";
-    document.querySelectorAll(".canvas-toolbar .btn-tool-kawaii").forEach(b => b.classList.remove("active"));
-    this.classList.add("active");
-  });
-  document.getElementById("eraserToolBtn").addEventListener("click", function() {
-    AppState.canvasTool = "eraser";
-    document.querySelectorAll(".canvas-toolbar .btn-tool-kawaii").forEach(b => b.classList.remove("active"));
-    this.classList.add("active");
-  });
-  document.getElementById("canvasUndoBtn").addEventListener("click", undoCanvas);
-  document.getElementById("canvasClearBtn").addEventListener("click", clearCanvas);
+  // 캔버스 툴 버튼 (옵션/호환성 유지)
+  const penToolBtn = document.getElementById("penToolBtn");
+  if (penToolBtn) {
+    penToolBtn.addEventListener("click", function() {
+      AppState.canvasTool = "pen";
+      document.querySelectorAll(".canvas-toolbar .btn-tool-kawaii").forEach(b => b.classList.remove("active"));
+      this.classList.add("active");
+    });
+  }
+  const highlighterToolBtn = document.getElementById("highlighterToolBtn");
+  if (highlighterToolBtn) {
+    highlighterToolBtn.addEventListener("click", function() {
+      AppState.canvasTool = "highlighter";
+      document.querySelectorAll(".canvas-toolbar .btn-tool-kawaii").forEach(b => b.classList.remove("active"));
+      this.classList.add("active");
+    });
+  }
+  const eraserToolBtn = document.getElementById("eraserToolBtn");
+  if (eraserToolBtn) {
+    eraserToolBtn.addEventListener("click", function() {
+      AppState.canvasTool = "eraser";
+      document.querySelectorAll(".canvas-toolbar .btn-tool-kawaii").forEach(b => b.classList.remove("active"));
+      this.classList.add("active");
+    });
+  }
+  const canvasUndoBtn = document.getElementById("canvasUndoBtn");
+  if (canvasUndoBtn) canvasUndoBtn.addEventListener("click", undoCanvas);
+  const canvasClearBtn = document.getElementById("canvasClearBtn");
+  if (canvasClearBtn) canvasClearBtn.addEventListener("click", clearCanvas);
 
   // 결과 화면 버튼
   document.getElementById("resFinishBtn").addEventListener("click", () => switchView("study"));
