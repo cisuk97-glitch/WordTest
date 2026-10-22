@@ -15,7 +15,7 @@ const AppState = {
   words: [],
   // 단어별 에빙하우스 진도 (wordId -> progress 객체)
   progressMap: {},
-  
+
   // 현재 플래시카드 인덱스
   studyIndex: 0,
   studyQueue: [],
@@ -38,6 +38,7 @@ const AppState = {
   lastX: 0,
   lastY: 0,
 
+
   // 오늘 단어 목록 & 인쇄 상태
   wordlistState: {
     filter: "all", // "all" | "new" | "review" | "vulnerable"
@@ -57,17 +58,17 @@ const EBBINGHAUS_INTERVALS = [1, 3, 7, 14, 30, 60];
 function loadLocalState() {
   const savedBooks = localStorage.getItem("cozy_wordbooks");
   if (savedBooks) {
-    try { AppState.wordbooks = JSON.parse(savedBooks); } catch(e){}
+    try { AppState.wordbooks = JSON.parse(savedBooks); } catch (e) { }
   }
-  
+
   const savedWords = localStorage.getItem("cozy_words");
   if (savedWords) {
-    try { AppState.words = JSON.parse(savedWords); } catch(e){}
+    try { AppState.words = JSON.parse(savedWords); } catch (e) { }
   }
-  
+
   const savedProgress = localStorage.getItem("cozy_progress");
   if (savedProgress) {
-    try { AppState.progressMap = JSON.parse(savedProgress); } catch(e){}
+    try { AppState.progressMap = JSON.parse(savedProgress); } catch (e) { }
   }
 
   const savedGoals = localStorage.getItem("cozy_study_goals");
@@ -75,7 +76,7 @@ function loadLocalState() {
     try {
       const g = JSON.parse(savedGoals);
       if (g.targetNewWords) AppState.settings.targetNewWords = Number(g.targetNewWords);
-    } catch(e) {}
+    } catch (e) { }
   }
 
   // 이전 테스트용 기본 샘플 단어장 정리 (단, wordbooks에 등록된 유효한 단어장은 보존)
@@ -251,7 +252,7 @@ function updateEbbinghausProgress(wordId, isCorrect, responseTimeMs, questionTyp
     prog.total_correct += 1;
     prog.consecutive_correct += 1;
     prog.review_stage = Math.min(prog.review_stage + 1, 6);
-    
+
     // 복습 주기 (일) 계산
     const intervalDays = EBBINGHAUS_INTERVALS[Math.max(0, prog.review_stage - 1)];
     const nextDate = new Date();
@@ -360,7 +361,7 @@ function switchView(viewName) {
   document.querySelectorAll(".view-section").forEach(sec => {
     sec.style.display = "none";
   });
-  
+
   const targetSec = document.getElementById(`view-${viewName}`);
   if (targetSec) targetSec.style.display = "block";
 
@@ -451,7 +452,7 @@ function updateSidebarStats() {
     progressPill.title = `오늘의 진도: ${totalCompleted}/${totalTarget} (신규 ${completedNew}/${targetNew} · 복습 ${completedReview}/${totalReviewTarget}) - 클릭하여 목표 변경`;
   }
 }
- 
+
 // ============================================================================
 // 🏷️ 품사 네모 박스 배지 및 줄바꿈 포맷팅 헬퍼
 // ============================================================================
@@ -598,7 +599,7 @@ function renderFlashcard() {
 
   document.getElementById("cardWordText").textContent = w.word;
   document.getElementById("cardPronounceText").textContent = w.pronunciation || "";
-  
+
   const meaningBox = document.getElementById("cardMeaningBox");
   meaningBox.innerHTML = formatMeaningToHtml(w.meaning);
   meaningBox.classList.remove("hidden-blur");
@@ -643,9 +644,9 @@ function speakWord(word) {
 // 스마트 채점 알고리즘 엔진 (English3 이식)
 // 한글 자모 분해, 편집거리 85% 유사도 오타 참작, 복수 뜻 인정
 // ============================================================================
-const CHOSUNG = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
-const JUNGSUNG = ['ㅏ','ㅐ','ㅑ','ㅒ','ㅓ','ㅔ','ㅕ','ㅖ','ㅗ','ㅘ','ㅙ','ㅚ','ㅛ','ㅜ','ㅝ','ㅞ','ㅟ','ㅠ','ㅡ','ㅢ','ㅣ'];
-const JONGSUNG = ['','ㄱ','ㄲ','ㄳ','ㄴ','ㄵ','ㄶ','ㄷ','ㄹ','ㄺ','ㄻ','ㄼ','ㄽ','ㄾ','ㄿ','ㅀ','ㅁ','ㅂ','ㅄ','ㅅ','ㅆ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+const CHOSUNG = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+const JUNGSUNG = ['ㅏ', 'ㅐ', 'ㅑ', 'ㅒ', 'ㅓ', 'ㅔ', 'ㅕ', 'ㅖ', 'ㅗ', 'ㅘ', 'ㅙ', 'ㅚ', 'ㅛ', 'ㅜ', 'ㅝ', 'ㅞ', 'ㅟ', 'ㅠ', 'ㅡ', 'ㅢ', 'ㅣ'];
+const JONGSUNG = ['', 'ㄱ', 'ㄲ', 'ㄳ', 'ㄴ', 'ㄵ', 'ㄶ', 'ㄷ', 'ㄹ', 'ㄺ', 'ㄻ', 'ㄼ', 'ㄽ', 'ㄾ', 'ㄿ', 'ㅀ', 'ㅁ', 'ㅂ', 'ㅄ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
 
 function decomposeHangul(text) {
   if (!text) return '';
@@ -735,7 +736,7 @@ function gradeAnswer(userInput, targetAnswer, isEnglish = false) {
     .split(/[,/·;\n]/)
     .map(c => c.trim())
     .filter(Boolean);
-  
+
   const candidateList = rawCandidates.length > 0 ? rawCandidates : [targetAnswer];
 
   for (const cand of candidateList) {
@@ -1384,7 +1385,7 @@ function renderWordListView() {
   // 3. 검색어 필터링
   if (st.search.trim()) {
     const q = st.search.trim().toLowerCase();
-    list = list.filter(w => 
+    list = list.filter(w =>
       w.word.toLowerCase().includes(q) ||
       (w.meaning && w.meaning.toLowerCase().includes(q)) ||
       (w.pronunciation && w.pronunciation.toLowerCase().includes(q))
@@ -1852,7 +1853,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (w) speakWord(w.word);
   });
 
-  document.getElementById("cardMeaningBox").addEventListener("click", function() {
+  document.getElementById("cardMeaningBox").addEventListener("click", function () {
     this.classList.toggle("hidden-blur");
   });
 
@@ -1881,7 +1882,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // 캔버스 툴 버튼 (옵션/호환성 유지)
   const penToolBtn = document.getElementById("penToolBtn");
   if (penToolBtn) {
-    penToolBtn.addEventListener("click", function() {
+    penToolBtn.addEventListener("click", function () {
       AppState.canvasTool = "pen";
       document.querySelectorAll(".canvas-toolbar .btn-tool-kawaii").forEach(b => b.classList.remove("active"));
       this.classList.add("active");
@@ -1889,7 +1890,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   const highlighterToolBtn = document.getElementById("highlighterToolBtn");
   if (highlighterToolBtn) {
-    highlighterToolBtn.addEventListener("click", function() {
+    highlighterToolBtn.addEventListener("click", function () {
       AppState.canvasTool = "highlighter";
       document.querySelectorAll(".canvas-toolbar .btn-tool-kawaii").forEach(b => b.classList.remove("active"));
       this.classList.add("active");
@@ -1897,7 +1898,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   const eraserToolBtn = document.getElementById("eraserToolBtn");
   if (eraserToolBtn) {
-    eraserToolBtn.addEventListener("click", function() {
+    eraserToolBtn.addEventListener("click", function () {
       AppState.canvasTool = "eraser";
       document.querySelectorAll(".canvas-toolbar .btn-tool-kawaii").forEach(b => b.classList.remove("active"));
       this.classList.add("active");
@@ -2012,7 +2013,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 오늘 단어 목록 필터 탭
   document.querySelectorAll("#view-wordlist [data-filter]").forEach(btn => {
-    btn.addEventListener("click", function() {
+    btn.addEventListener("click", function () {
       document.querySelectorAll("#view-wordlist [data-filter]").forEach(b => b.classList.remove("active"));
       this.classList.add("active");
       AppState.wordlistState.filter = this.dataset.filter;
