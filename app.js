@@ -132,13 +132,16 @@ async function syncWordsFromSupabase(wordbookId) {
 
     if (!bErr && bData && bData.length > 0) {
       AppState.wordbooks = bData;
-      if (!AppState.activeWordbookId || !bData.some(b => Number(b.id) === Number(AppState.activeWordbookId))) {
+      const requestedId = wordbookId || AppState.activeWordbookId;
+      if (requestedId && bData.some(b => Number(b.id) === Number(requestedId))) {
+        AppState.activeWordbookId = Number(requestedId);
+      } else {
         AppState.activeWordbookId = Number(bData[0].id);
       }
     }
 
-    // 2. 단어 테이블(words) 전체 로드 (PostgREST 1000행 제한 대응 페이지네이션)
-    const targetBookId = wordbookId || AppState.activeWordbookId;
+    // 2. 단어 테이블(words) 로드 (PostgREST 1000행 제한 대응 페이지네이션)
+    const targetBookId = AppState.activeWordbookId;
     let allFetchedWords = [];
     let from = 0;
     const pageSize = 1000;
@@ -173,51 +176,49 @@ async function syncWordsFromSupabase(wordbookId) {
       }
     }
 
-    if (allFetchedWords.length > 0) {
-      AppState.words = allFetchedWords;
+    AppState.words = allFetchedWords;
 
-      // 진도 맵 보정 (기존 진도 유지)
-      AppState.words.forEach(w => {
-        if (!AppState.progressMap[w.id]) {
-          AppState.progressMap[w.id] = {
-            word_id: w.id,
-            user_status: "new",
-            review_stage: 0,
-            consecutive_correct: 0,
-            total_tests: 0,
-            total_correct: 0,
-            total_wrong: 0,
-            is_vulnerable: false,
-            next_review_at: null,
-            last_tested_at: null
-          };
-        }
-      });
-
-      // 3. 사용자 진도 테이블(user_word_progress)도 동기화
-      try {
-        const { data: pData } = await sb.from("user_word_progress").select("*");
-        if (pData && pData.length > 0) {
-          pData.forEach(p => {
-            AppState.progressMap[p.word_id] = {
-              ...AppState.progressMap[p.word_id],
-              ...p
-            };
-          });
-        }
-      } catch (pe) {
-        console.warn("Progress sync warning:", pe);
+    // 진도 맵 보정 (기존 진도 유지)
+    AppState.words.forEach(w => {
+      if (!AppState.progressMap[w.id]) {
+        AppState.progressMap[w.id] = {
+          word_id: w.id,
+          user_status: "new",
+          review_stage: 0,
+          consecutive_correct: 0,
+          total_tests: 0,
+          total_correct: 0,
+          total_wrong: 0,
+          is_vulnerable: false,
+          next_review_at: null,
+          last_tested_at: null
+        };
       }
+    });
 
-      saveLocalState();
-      updateWordbookSelectDropdown();
-      renderFlashcard();
-      renderWordListView();
-      updateSidebarStats();
-      renderWordbooksList();
-      console.log(`🌸 Supabase에서 ${allFetchedWords.length}개 단어(예문 포함) 동기화 완료!`);
-      return true;
+    // 3. 사용자 진도 테이블(user_word_progress)도 동기화
+    try {
+      const { data: pData } = await sb.from("user_word_progress").select("*");
+      if (pData && pData.length > 0) {
+        pData.forEach(p => {
+          AppState.progressMap[p.word_id] = {
+            ...AppState.progressMap[p.word_id],
+            ...p
+          };
+        });
+      }
+    } catch (pe) {
+      console.warn("Progress sync warning:", pe);
     }
+
+    saveLocalState();
+    updateWordbookSelectDropdown();
+    renderFlashcard();
+    renderWordListView();
+    updateSidebarStats();
+    renderWordbooksList();
+    console.log(`🌸 Supabase에서 ${allFetchedWords.length}개 단어(예문 포함) 동기화 완료!`);
+    return true;
   } catch (err) {
     console.error("Supabase sync failed:", err);
   }
@@ -1989,6 +1990,8 @@ document.addEventListener("DOMContentLoaded", () => {
     alertBox.className = `connection-alert ${res.success ? 'status-connected' : (res.isLocal ? 'status-local' : 'status-error')}`;
     alertBox.textContent = res.message;
     if (res.success) {
+      alertBox.textContent = "🔄 Supabase 데이터베이스 동기화 중...";
+      await syncWordsFromSupabase();
       alert("🌸 설정(학습 목표 및 Supabase)이 저장되고 정상 연결되었습니다!");
       settingsModal.classList.remove("active");
     } else if (res.isLocal) {
