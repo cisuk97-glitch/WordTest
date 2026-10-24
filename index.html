@@ -239,7 +239,8 @@
             </div>
           </div>
 
-          <div style="display: flex; justify-content: center; gap: 14px; margin-top: 10px;">
+          <div style="display: flex; justify-content: center; gap: 14px; margin-top: 10px; flex-wrap: wrap;">
+            <button class="btn-kawaii-secondary" id="resOpenWrongModalBtn" style="border-color: var(--coral-pink); color: var(--coral-pink);">틀린 단어 확인 📝</button>
             <button class="btn-kawaii-secondary" id="resRetryWrongBtn">오답만 다시 풀기 🔄</button>
             <button class="btn-kawaii-primary" id="resFinishBtn">오늘의 학습 완료 🌸</button>
           </div>
@@ -506,6 +507,39 @@
       <div style="display: flex; flex-direction: column; gap: 10px;">
         <button class="btn-kawaii-primary" id="btnConfirmPreserveDelete">취약 단어 보존 단어장으로 이동 후 삭제 (권장)</button>
         <button class="btn-kawaii-secondary" id="btnCancelDelete">취소하고 단어장 유지</button>
+      </div>
+    </div>
+  <!-- 5. 채점 후 틀린 단어 확인 모달 (오답 노트) -->
+  <div class="kawaii-modal-backdrop" id="wrongWordsModal">
+    <div class="kawaii-modal-card wrong-words-modal-card">
+      <div class="modal-cute-header">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <h3 style="font-family: var(--font-cute); font-size: 1.6rem; color: var(--coral-pink); margin: 0;">
+            📝 오답 노트 / 틀린 단어 확인
+          </h3>
+          <span class="wrong-count-badge" id="wrongWordsBadge">0개 오답</span>
+        </div>
+        <p style="font-size: 0.88rem; color: var(--text-muted); margin: 6px 0 0 0;" id="wrongWordsSubTitle">
+          오늘 테스트에서 틀린 단어를 확인하고 복습해보세요.
+        </p>
+      </div>
+
+      <!-- 오답 목록 테이블 컨테이너 -->
+      <div class="wrong-words-table-wrap" id="wrongWordsTableWrap">
+        <div class="wrong-words-header-row">
+          <div class="col-word">단어 (English)</div>
+          <div class="col-answer">정답 (뜻)</div>
+          <div class="col-user">작성한 오답</div>
+        </div>
+        <div class="wrong-words-list" id="wrongWordsList">
+          <!-- JS로 동적 렌더링 -->
+        </div>
+      </div>
+
+      <!-- 하단 액션 버튼 -->
+      <div class="wrong-modal-actions">
+        <button class="btn-kawaii-secondary" id="btnModalRetryWrong">오답만 다시 풀기 🔄</button>
+        <button class="btn-kawaii-primary" id="btnCloseWrongWordsModal">확인 / 결과 보기 🌸</button>
       </div>
     </div>
   </div>

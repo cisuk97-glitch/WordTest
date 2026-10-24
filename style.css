@@ -1358,6 +1358,144 @@ body::before {
   }
 }
 
+/* 5. Wrong Words Modal (오답 노트 창) */
+.wrong-words-modal-card {
+  max-width: 720px;
+  width: 95%;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+}
+
+.modal-cute-header {
+  border-bottom: 2px dashed var(--border-soft);
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+}
+
+.wrong-count-badge {
+  background: rgba(255, 71, 87, 0.12);
+  color: #FF4757;
+  border: 1.5px solid rgba(255, 71, 87, 0.3);
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+}
+
+.wrong-words-table-wrap {
+  border: 2px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--bg-warm-light);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 16px;
+  flex: 1;
+  min-height: 200px;
+}
+
+.wrong-words-header-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1.6fr 1.2fr;
+  background: var(--milk-tea-soft);
+  padding: 10px 16px;
+  font-weight: 800;
+  font-size: 0.88rem;
+  color: var(--text-title);
+  border-bottom: 2px solid var(--border-soft);
+}
+
+.wrong-words-list {
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+.wrong-word-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1.6fr 1.2fr;
+  padding: 10px 16px;
+  border-bottom: 1px dashed var(--border-soft);
+  align-items: center;
+  transition: background 0.15s ease;
+  font-size: 0.92rem;
+}
+
+.wrong-word-row:last-child {
+  border-bottom: none;
+}
+
+.wrong-word-row:hover {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.wrong-word-row .col-word {
+  font-family: var(--font-cute);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-title);
+  word-break: break-word;
+}
+
+.wrong-word-row .col-answer {
+  color: #208B67;
+  font-weight: 700;
+  line-height: 1.4;
+  word-break: break-word;
+  padding-right: 8px;
+}
+
+.wrong-word-row .col-user {
+  word-break: break-word;
+}
+
+.user-wrong-badge {
+  display: inline-block;
+  background: rgba(255, 71, 87, 0.1);
+  color: #E05666;
+  border: 1px solid rgba(255, 71, 87, 0.25);
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.user-empty-badge {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 0.85rem;
+}
+
+.wrong-empty-state {
+  padding: 36px 16px;
+  text-align: center;
+  color: var(--text-title);
+}
+
+.wrong-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: auto;
+}
+
+@media (max-width: 600px) {
+  .wrong-words-modal-card {
+    padding: 16px;
+  }
+  .wrong-words-header-row,
+  .wrong-word-row {
+    grid-template-columns: 1fr 1.3fr 1fr;
+    padding: 8px 10px;
+    font-size: 0.82rem;
+  }
+  .wrong-word-row .col-word {
+    font-size: 0.92rem;
+  }
+}
+
 /* ============================================================================
    📱 Responsive Queries (iPad & Mobile Support)
    ============================================================================ */

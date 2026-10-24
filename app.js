@@ -796,7 +796,7 @@ function gradeAnswer(userInput, targetAnswer, isEnglish = false) {
 // ============================================================================
 // 주관식 단어 테스트 엔진 (Row-based Single Page Test)
 // ============================================================================
-function startSubjectiveTest() {
+function startSubjectiveTest(wordsOverride) {
   if (!AppState.words || AppState.words.length === 0) {
     alert("학습할 단어가 없습니다. 먼저 단어장을 등록해주세요 🌸");
     switchView("wordbooks");
@@ -810,9 +810,14 @@ function startSubjectiveTest() {
   session.elapsedSeconds = 0;
   session.startTime = Date.now();
 
-  // 오늘의 학습 단어(todayWords) 추출, 없으면 전체 단어 fallback
-  const { todayWords } = getTodayStudyWords();
-  let pool = (todayWords && todayWords.length > 0) ? [...todayWords] : [...AppState.words];
+  let pool = [];
+  if (wordsOverride && wordsOverride.length > 0) {
+    pool = [...wordsOverride];
+  } else {
+    // 오늘의 학습 단어(todayWords) 추출, 없으면 전체 단어 fallback
+    const { todayWords } = getTodayStudyWords();
+    pool = (todayWords && todayWords.length > 0) ? [...todayWords] : [...AppState.words];
+  }
 
   // 무작위 셔플 (랜덤 순서 출제)
   pool.sort(() => Math.random() - 0.5);
@@ -1041,6 +1046,133 @@ async function finishSubjectiveTest() {
   });
 
   switchView("results");
+  // 채점 후 틀린 단어 확인 창(모달) 자동 오픈
+  showWrongWordsModal();
+}
+
+// ============================================================================
+// 채점 후 틀린 단어 확인 모달 (오답 노트) 제어
+// ============================================================================
+function showWrongWordsModal() {
+  const modal = document.getElementById("wrongWordsModal");
+  if (!modal) return;
+
+  const session = AppState.testSession;
+  const wrongResults = (session.results || []).filter(r => !r.isCorrect);
+
+  const badge = document.getElementById("wrongWordsBadge");
+  const subTitle = document.getElementById("wrongWordsSubTitle");
+  const tableWrap = document.getElementById("wrongWordsTableWrap");
+  const retryBtn = document.getElementById("btnModalRetryWrong");
+
+  if (wrongResults.length === 0) {
+    if (badge) {
+      badge.textContent = "0개 오답 (만점! 🎉)";
+      badge.style.background = "rgba(32, 139, 103, 0.12)";
+      badge.style.color = "#208B67";
+      badge.style.borderColor = "rgba(32, 139, 103, 0.3)";
+    }
+    if (subTitle) {
+      subTitle.textContent = "축하합니다! 모든 문제를 완벽하게 맞혔습니다 💖";
+    }
+    if (tableWrap) {
+      tableWrap.innerHTML = `
+        <div class="wrong-empty-state">
+          <div style="font-size: 3rem; margin-bottom: 8px;">🎉✨</div>
+          <h4 style="font-family: var(--font-cute); font-size: 1.5rem; color: #208B67; margin-bottom: 6px;">틀린 단어가 없습니다! 완벽해요!</h4>
+          <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0;">오늘의 테스트를 100점으로 마쳤습니다. 대단해요!</p>
+        </div>
+      `;
+    }
+    if (retryBtn) retryBtn.style.display = "none";
+  } else {
+    if (badge) {
+      badge.textContent = `${wrongResults.length}개 오답`;
+      badge.style.background = "rgba(255, 71, 87, 0.12)";
+      badge.style.color = "#FF4757";
+      badge.style.borderColor = "rgba(255, 71, 87, 0.3)";
+    }
+    if (subTitle) {
+      subTitle.textContent = "오늘 테스트에서 틀린 단어를 확인하고 다시 복습해보세요.";
+    }
+    if (tableWrap) {
+      tableWrap.innerHTML = `
+        <div class="wrong-words-header-row">
+          <div class="col-word">단어 (English)</div>
+          <div class="col-answer">정답 (뜻)</div>
+          <div class="col-user">작성한 오답</div>
+        </div>
+        <div class="wrong-words-list" id="wrongWordsList"></div>
+      `;
+
+      const listContainer = document.getElementById("wrongWordsList");
+      wrongResults.forEach(r => {
+        const row = document.createElement("div");
+        row.className = "wrong-word-row";
+
+        const wordCol = document.createElement("div");
+        wordCol.className = "col-word";
+        wordCol.textContent = r.word?.word || "";
+
+        const ansCol = document.createElement("div");
+        ansCol.className = "col-answer";
+        ansCol.textContent = r.correctAnswer || r.word?.meaning || "";
+
+        const userCol = document.createElement("div");
+        userCol.className = "col-user";
+        const trimmed = (r.userAnswer || "").trim();
+        if (trimmed) {
+          const badgeSpan = document.createElement("span");
+          badgeSpan.className = "user-wrong-badge";
+          badgeSpan.textContent = trimmed;
+          userCol.appendChild(badgeSpan);
+        } else {
+          const emptySpan = document.createElement("span");
+          emptySpan.className = "user-empty-badge";
+          emptySpan.textContent = "(미작성)";
+          userCol.appendChild(emptySpan);
+        }
+
+        row.appendChild(wordCol);
+        row.appendChild(ansCol);
+        row.appendChild(userCol);
+        listContainer.appendChild(row);
+      });
+    }
+    if (retryBtn) {
+      retryBtn.style.display = "inline-flex";
+      retryBtn.textContent = `오답만 다시 풀기 (${wrongResults.length}개) 🔄`;
+    }
+  }
+
+  modal.classList.add("active");
+}
+
+function closeWrongWordsModal() {
+  const modal = document.getElementById("wrongWordsModal");
+  if (modal) modal.classList.remove("active");
+}
+
+function retryWrongWordsOnly() {
+  closeWrongWordsModal();
+  const session = AppState.testSession;
+  const wrongWords = (session.results || []).filter(r => !r.isCorrect).map(r => r.word);
+
+  if (!wrongWords || wrongWords.length === 0) {
+    alert("틀린 단어가 없습니다! 모두 정답입니다 🎉");
+    return;
+  }
+
+  // test 뷰로 전환하고 오답 단어로만 재출제
+  AppState.currentView = "test";
+  document.querySelectorAll(".view-section").forEach(sec => sec.style.display = "none");
+  const testSec = document.getElementById("view-test");
+  if (testSec) testSec.style.display = "block";
+  document.querySelectorAll(".drawer-nav-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.view === "test");
+  });
+
+  startSubjectiveTest(wrongWords);
 }
 
 // ============================================================================
@@ -1909,9 +2041,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const canvasClearBtn = document.getElementById("canvasClearBtn");
   if (canvasClearBtn) canvasClearBtn.addEventListener("click", clearCanvas);
 
-  // 결과 화면 버튼
-  document.getElementById("resFinishBtn").addEventListener("click", () => switchView("study"));
-  document.getElementById("resRetryWrongBtn").addEventListener("click", () => switchView("test"));
+  // 결과 화면 & 오답 모달 버튼 이벤트
+  document.getElementById("resFinishBtn")?.addEventListener("click", () => switchView("study"));
+  document.getElementById("resRetryWrongBtn")?.addEventListener("click", retryWrongWordsOnly);
+  document.getElementById("resOpenWrongModalBtn")?.addEventListener("click", showWrongWordsModal);
+  document.getElementById("btnCloseWrongWordsModal")?.addEventListener("click", closeWrongWordsModal);
+  document.getElementById("btnModalRetryWrong")?.addEventListener("click", retryWrongWordsOnly);
 
   // 단어장 안전 삭제 모달 이벤트
   document.getElementById("btnConfirmPreserveDelete").addEventListener("click", executeSafeDelete);
