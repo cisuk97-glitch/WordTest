@@ -253,10 +253,11 @@ function updateEbbinghausProgress(wordId, isCorrect, responseTimeMs, questionTyp
     prog.consecutive_correct += 1;
     prog.review_stage = Math.min(prog.review_stage + 1, 6);
 
-    // 복습 주기 (일) 계산
+    // 복습 주기 (일) 계산 (자정 00:00:00 기준)
     const intervalDays = EBBINGHAUS_INTERVALS[Math.max(0, prog.review_stage - 1)];
     const nextDate = new Date();
     nextDate.setDate(nextDate.getDate() + intervalDays);
+    nextDate.setHours(0, 0, 0, 0);
     prog.next_review_at = nextDate.toISOString();
 
     if (prog.review_stage >= 3) {
@@ -269,9 +270,9 @@ function updateEbbinghausProgress(wordId, isCorrect, responseTimeMs, questionTyp
     prog.review_stage = Math.max(1, Math.floor(prog.review_stage / 2));
     prog.is_vulnerable = true; // 오답 발생 시 취약 단어로 분류
 
-    // 당일 4시간 뒤 재복습 편성
+    // 당일 즉시 재복습 가능하도록 당일 자정(00:00:00) 편성
     const nextDate = new Date();
-    nextDate.setHours(nextDate.getHours() + 4);
+    nextDate.setHours(0, 0, 0, 0);
     prog.next_review_at = nextDate.toISOString();
     prog.user_status = "weak";
   }
@@ -386,6 +387,9 @@ function switchView(viewName) {
 function updateSidebarStats() {
   const now = new Date();
   const todayStr = now.toDateString();
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+
   let todayNew = 0;
   let todayReview = 0;
   let vulnerableCount = 0;
@@ -401,7 +405,7 @@ function updateSidebarStats() {
     if (!prog || prog.review_stage === 0) {
       todayNew++;
     } else {
-      if (prog.next_review_at && new Date(prog.next_review_at) <= now) {
+      if (prog.next_review_at && new Date(prog.next_review_at) <= todayEnd) {
         todayReview++;
       }
     }
@@ -533,7 +537,9 @@ function getWordExamples(w) {
 }
 
 function getTodayStudyWords() {
-  const now = new Date();
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+
   const allNewWords = AppState.words.filter(w => {
     const prog = AppState.progressMap[w.id];
     return !prog || prog.review_stage === 0;
@@ -541,7 +547,7 @@ function getTodayStudyWords() {
 
   const allReviewWords = AppState.words.filter(w => {
     const prog = AppState.progressMap[w.id];
-    return prog && prog.review_stage > 0 && prog.next_review_at && new Date(prog.next_review_at) <= now;
+    return prog && prog.review_stage > 0 && prog.next_review_at && new Date(prog.next_review_at) <= todayEnd;
   });
 
   const targetNewCount = AppState.settings.targetNewWords || 10;
@@ -1644,7 +1650,8 @@ function toggleWordLearningStatus(wordId, btnEl) {
       prog.total_correct = 1;
     }
     const nextDate = new Date();
-    nextDate.setDate(nextDate.getDate() + 1); // 1일 후 복습 스케줄
+    nextDate.setDate(nextDate.getDate() + 1); // 1일 후 복습 스케줄 (자정 기준)
+    nextDate.setHours(0, 0, 0, 0);
     prog.next_review_at = nextDate.toISOString();
     prog.last_tested_at = now.toISOString();
   } else {
