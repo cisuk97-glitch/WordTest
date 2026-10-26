@@ -46,6 +46,13 @@ const AppState = {
     sort: "unit", // "unit" | "alpha" | "weak"
     hideMeaning: false,
     hideExample: false
+  },
+
+  // 채점 후 오답 단어 전체 보기 학습 상태
+  wrongWordsList: [],
+  wrongStudyState: {
+    hideMeaning: false,
+    hideExample: false
   }
 };
 
@@ -53,74 +60,67 @@ const AppState = {
 const EBBINGHAUS_INTERVALS = [1, 3, 7, 14, 30, 60];
 
 // ============================================================================
-// 로컬 스토리지 동기화 및 초기화
+// 상태 초기화 (원격 Supabase 연동 모드)
 // ============================================================================
 function loadLocalState() {
-  const savedBooks = localStorage.getItem("cozy_wordbooks");
-  if (savedBooks) {
-    try { AppState.wordbooks = JSON.parse(savedBooks); } catch (e) { }
-  }
+  // 이전 로컬 DB 잔여 캐시 완전 제거 (Supabase DB 전면 연동)
+  localStorage.removeItem("cozy_wordbooks");
+  localStorage.removeItem("cozy_words");
+  localStorage.removeItem("cozy_progress");
+  localStorage.removeItem("cozy_study_goals");
+  localStorage.removeItem("cozy_schedules");
 
-  const savedWords = localStorage.getItem("cozy_words");
-  if (savedWords) {
-    try { AppState.words = JSON.parse(savedWords); } catch (e) { }
-  }
+  AppState.wordbooks = [];
+  AppState.words = [];
+  AppState.progressMap = {};
 
-  const savedProgress = localStorage.getItem("cozy_progress");
-  if (savedProgress) {
-    try { AppState.progressMap = JSON.parse(savedProgress); } catch (e) { }
+  const savedActiveBookId = localStorage.getItem("cozy_active_wordbook_id");
+  if (savedActiveBookId) {
+    AppState.activeWordbookId = Number(savedActiveBookId);
   }
-
-  const savedGoals = localStorage.getItem("cozy_study_goals");
-  if (savedGoals) {
-    try {
-      const g = JSON.parse(savedGoals);
-      if (g.targetNewWords) AppState.settings.targetNewWords = Number(g.targetNewWords);
-    } catch (e) { }
-  }
-
-  // 이전 테스트용 기본 샘플 단어장 정리 (단, wordbooks에 등록된 유효한 단어장은 보존)
-  const validBookIds = new Set(AppState.wordbooks.map(b => Number(b.id)));
-  if (validBookIds.size > 0) {
-    AppState.words = AppState.words.filter(w => validBookIds.has(Number(w.wordbook_id)));
-  }
-
-  if (AppState.wordbooks.length > 0 && !AppState.activeWordbookId) {
-    AppState.activeWordbookId = AppState.wordbooks[0].id;
-  }
-
-  // 진도 맵 초기화 보정
-  AppState.words.forEach(w => {
-    if (!AppState.progressMap[w.id]) {
-      AppState.progressMap[w.id] = {
-        word_id: w.id,
-        user_status: "new",
-        review_stage: 0,
-        consecutive_correct: 0,
-        total_tests: 0,
-        total_correct: 0,
-        total_wrong: 0,
-        is_vulnerable: false,
-        next_review_at: null,
-        last_tested_at: null
-      };
-    }
-  });
 }
 
 function saveLocalState() {
-  localStorage.setItem("cozy_wordbooks", JSON.stringify(AppState.wordbooks));
-  localStorage.setItem("cozy_words", JSON.stringify(AppState.words));
-  localStorage.setItem("cozy_progress", JSON.stringify(AppState.progressMap));
-  localStorage.setItem("cozy_study_goals", JSON.stringify(AppState.settings));
+  // 로컬 DB 저장 완전 제거 - 활성 단어장 선택 ID만 가볍게 보존
+  if (AppState.activeWordbookId) {
+    localStorage.setItem("cozy_active_wordbook_id", AppState.activeWordbookId);
+  }
 }
 
 // ============================================================================
-// 🌸 Supabase words 테이블 최신 단어 & 예문 동기화 엔진
+// 🌸 유저 ID 식별자 및 로컬 진도 Supabase 연동 헬퍼
+// ============================================================================
+const GUEST_USER_ID = "00000000-0000-0000-0000-000000000001";
+
+async function getEffectiveUserId(sb) {
+  if (sb && sb.auth) {
+    try {
+      const { data } = await sb.auth.getUser();
+      if (data?.user?.id) return data.user.id;
+    } catch (e) { }
+  }
+  let guestId = localStorage.getItem("cozy_guest_user_id");
+  if (!guestId) {
+    guestId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : GUEST_USER_ID;
+    localStorage.setItem("cozy_guest_user_id", guestId);
+  }
+  return guestId;
+}
+
+// ============================================================================
+// 🌸 Supabase words 테이블 최신 단어 & 예문 동기화 엔진 (원격 DB 단독 연동)
 // ============================================================================
 async function syncWordsFromSupabase(wordbookId) {
   const sb = window.getSupabase();
   if (!sb || !window.SUPABASE_CONFIG || !window.SUPABASE_CONFIG.isConfigured()) {
+    AppState.wordbooks = [];
+    AppState.words = [];
+    AppState.progressMap = {};
+    updateWordbookSelectDropdown();
+    renderFlashcard();
+    renderWordListView();
+    updateSidebarStats();
+    renderWordbooksList();
     return false;
   }
 
@@ -131,14 +131,32 @@ async function syncWordsFromSupabase(wordbookId) {
       .select("*")
       .order("id", { ascending: true });
 
-    if (!bErr && bData && bData.length > 0) {
-      AppState.wordbooks = bData;
-      const requestedId = wordbookId || AppState.activeWordbookId;
-      if (requestedId && bData.some(b => Number(b.id) === Number(requestedId))) {
-        AppState.activeWordbookId = Number(requestedId);
-      } else {
-        AppState.activeWordbookId = Number(bData[0].id);
-      }
+    if (bErr) throw bErr;
+
+    if (!bData || bData.length === 0) {
+      AppState.wordbooks = [];
+      AppState.words = [];
+      AppState.progressMap = {};
+      AppState.activeWordbookId = null;
+      updateWordbookSelectDropdown();
+      renderFlashcard();
+      renderWordListView();
+      updateSidebarStats();
+      renderWordbooksList();
+      return true;
+    }
+
+    AppState.wordbooks = bData;
+    const requestedId = wordbookId || AppState.activeWordbookId;
+    if (requestedId && bData.some(b => Number(b.id) === Number(requestedId))) {
+      AppState.activeWordbookId = Number(requestedId);
+    } else {
+      AppState.activeWordbookId = Number(bData[0].id);
+    }
+
+    const activeBook = bData.find(b => Number(b.id) === Number(AppState.activeWordbookId));
+    if (activeBook && activeBook.daily_new_target) {
+      AppState.settings.targetNewWords = Number(activeBook.daily_new_target);
     }
 
     // 2. 단어 테이블(words) 로드 (PostgREST 1000행 제한 대응 페이지네이션)
@@ -161,8 +179,8 @@ async function syncWordsFromSupabase(wordbookId) {
 
       const { data, error } = await query;
       if (error) {
-        console.warn("Supabase words fetch error:", error);
-        break;
+        console.error("Supabase words fetch error:", error);
+        throw error;
       }
 
       if (data && data.length > 0) {
@@ -178,8 +196,24 @@ async function syncWordsFromSupabase(wordbookId) {
     }
 
     AppState.words = allFetchedWords;
+    AppState.progressMap = {};
 
-    // 진도 맵 보정 (기존 진도 유지)
+    // 3. 사용자 진도 테이블(user_word_progress) 동기화
+    const userId = await getEffectiveUserId(sb);
+    if (userId) {
+      const { data: pData, error: pErr } = await sb
+        .from("user_word_progress")
+        .select("*")
+        .eq("user_id", userId);
+      if (pErr) console.warn("Progress sync warning:", pErr);
+      if (pData && pData.length > 0) {
+        pData.forEach(p => {
+          AppState.progressMap[p.word_id] = p;
+        });
+      }
+    }
+
+    // 진도 맵 보정 (미등록 단어 기본 상태)
     AppState.words.forEach(w => {
       if (!AppState.progressMap[w.id]) {
         AppState.progressMap[w.id] = {
@@ -197,33 +231,22 @@ async function syncWordsFromSupabase(wordbookId) {
       }
     });
 
-    // 3. 사용자 진도 테이블(user_word_progress)도 동기화
-    try {
-      const { data: pData } = await sb.from("user_word_progress").select("*");
-      if (pData && pData.length > 0) {
-        pData.forEach(p => {
-          AppState.progressMap[p.word_id] = {
-            ...AppState.progressMap[p.word_id],
-            ...p
-          };
-        });
-      }
-    } catch (pe) {
-      console.warn("Progress sync warning:", pe);
-    }
-
     saveLocalState();
     updateWordbookSelectDropdown();
     renderFlashcard();
     renderWordListView();
     updateSidebarStats();
     renderWordbooksList();
+    if (document.getElementById("view-stats")?.classList.contains("active") || AppState.currentView === "stats") {
+      renderStatsDashboard();
+    }
     console.log(`🌸 Supabase에서 ${allFetchedWords.length}개 단어(예문 포함) 동기화 완료!`);
     return true;
   } catch (err) {
     console.error("Supabase sync failed:", err);
+    alert("⚠️ Supabase 데이터 로드 실패: " + (err.message || err));
+    return false;
   }
-  return false;
 }
 
 // ============================================================================
@@ -280,13 +303,11 @@ function updateEbbinghausProgress(wordId, isCorrect, responseTimeMs, questionTyp
   const accuracy = (prog.total_correct / prog.total_tests) * 100;
   prog.recent_accuracy = Math.round(accuracy * 10) / 10;
   AppState.progressMap[wordId] = prog;
-  saveLocalState();
 
-  // Supabase 동기화 (설정 시)
+  // Supabase 동기화 (게스트/로그인 모두 지원, 원격 DB 직접 upsert)
   const sb = window.getSupabase();
-  if (sb) {
-    sb.auth.getUser().then(({ data }) => {
-      const userId = data?.user?.id;
+  if (sb && SUPABASE_CONFIG.isConfigured()) {
+    getEffectiveUserId(sb).then(userId => {
       if (userId) {
         sb.from("user_word_progress").upsert({
           user_id: userId,
@@ -301,7 +322,7 @@ function updateEbbinghausProgress(wordId, isCorrect, responseTimeMs, questionTyp
           recent_accuracy: prog.recent_accuracy,
           next_review_at: prog.next_review_at,
           last_tested_at: prog.last_tested_at
-        }).catch(err => console.warn("Supabase progress upsert error:", err));
+        }, { onConflict: "user_id,word_id" }).catch(err => console.error("Supabase progress upsert error:", err));
       }
     });
   }
@@ -327,23 +348,18 @@ async function syncToSchedulesPlanner(summary) {
     updated_at: new Date().toISOString()
   };
 
-  // 로컬 schedules 저장소에 백업
-  const localSchedules = JSON.parse(localStorage.getItem("cozy_schedules") || "[]");
-  localSchedules.unshift(scheduleData);
-  localStorage.setItem("cozy_schedules", JSON.stringify(localSchedules.slice(0, 50)));
-
-  // Supabase schedules 테이블 삽입
+  // Supabase schedules 테이블 삽입 (원격 DB 직접 적재)
   const sb = window.getSupabase();
-  if (sb) {
+  if (sb && SUPABASE_CONFIG.isConfigured()) {
     try {
       const { error } = await sb.from("schedules").insert([scheduleData]);
       if (error) {
-        console.warn("⚠️ schedules 테이블 삽입 주의(로컬 저장 유지):", error.message);
+        console.error("⚠️ schedules 테이블 삽입 실패:", error.message);
       } else {
         console.log("🌸 플래너(schedules) 연동 성공!");
       }
     } catch (e) {
-      console.warn("Supabase schedules insert exception:", e);
+      console.error("Supabase schedules insert exception:", e);
     }
   }
 
@@ -380,6 +396,8 @@ function switchView(viewName) {
     renderWordbooksList();
   } else if (viewName === "stats") {
     renderStatsDashboard();
+  } else if (viewName === "wrong-study") {
+    renderWrongWordsStudyList();
   }
   updateSidebarStats();
 }
@@ -701,24 +719,33 @@ function levenshteinDistance(s1, s2) {
   return d[len1][len2];
 }
 
-function cleanText(text) {
+function cleanText(text, stripParens = true) {
   if (!text) return '';
-  return text.toLowerCase()
+  let str = text.toLowerCase()
     .replace(/\[[^\]]*\]/g, '') // 품사 태그 [명], [동] 등 제거
-    .replace(/[0-9]+\./g, '')   // 1., 2. 번호 제거
-    .replace(/[\s~·,/()[\]\-_\'".!?~;:+]/g, '');
+    .replace(/[0-9]+\./g, '');   // 1., 2. 번호 제거
+
+  if (stripParens) {
+    const withoutParens = str.replace(/\([^)]*\)/g, '');
+    // 괄호 내용 지웠을 때 빈 문자열이 아니면 괄호 제외 버전 채택
+    if (withoutParens.replace(/[\s~·,/()[\]\-_\'".!?~;:+]/g, '')) {
+      str = withoutParens;
+    }
+  }
+
+  return str.replace(/[\s~·,/()[\]\-_\'".!?~;:+]/g, '');
 }
 
 function gradeAnswer(userInput, targetAnswer, isEnglish = false) {
-  const uClean = cleanText(userInput);
-  const tClean = cleanText(targetAnswer);
+  const uClean = cleanText(userInput, false);
+  const tClean = cleanText(targetAnswer, true);
 
   if (!uClean) {
     return { isCorrect: false, isTypo: false, notice: '', matchedAnswer: targetAnswer };
   }
 
   // 1. 단순 완전 일치
-  if (uClean === tClean) {
+  if (uClean === tClean || uClean === cleanText(targetAnswer, false)) {
     return { isCorrect: true, isTypo: false, notice: '', matchedAnswer: targetAnswer };
   }
 
@@ -739,41 +766,46 @@ function gradeAnswer(userInput, targetAnswer, isEnglish = false) {
   // 3. 한글 뜻 채점 모드 (복수 뜻 분할 및 오타 참작)
   const rawCandidates = targetAnswer
     .replace(/\[[^\]]*\]/g, '')
-    .split(/[,/·;\n]/)
+    .split(/(?:[,/·;\n]|\b[0-9]+\.|\s[0-9]+\.)/)
     .map(c => c.trim())
     .filter(Boolean);
 
   const candidateList = rawCandidates.length > 0 ? rawCandidates : [targetAnswer];
 
   for (const cand of candidateList) {
-    const cClean = cleanText(cand);
-    if (!cClean) continue;
+    const cClean = cleanText(cand, true);
+    const cCleanWithParens = cleanText(cand, false);
+    if (!cClean && !cCleanWithParens) continue;
 
-    // 3-1. 후보 뜻과 완전 일치
-    if (uClean === cClean) {
-      return { isCorrect: true, isTypo: false, notice: '', matchedAnswer: cand };
-    }
+    const targets = Array.from(new Set([cClean, cCleanWithParens].filter(Boolean)));
 
-    // 3-2. 동사 어근 일치 ('시작하다' <-> '시작', '강조하다' <-> '강조')
-    if (cClean.endsWith('하다') && uClean === cClean.slice(0, -2)) {
-      return { isCorrect: true, isTypo: false, notice: '', matchedAnswer: cand };
-    }
-    if (uClean.endsWith('하다') && cClean === uClean.slice(0, -2)) {
-      return { isCorrect: true, isTypo: false, notice: '', matchedAnswer: cand };
-    }
-
-    // 3-3. 접미사 '~시키다', '~되다' 대응
-    if ((cClean.endsWith('시키다') || cClean.endsWith('되다')) && uClean === cClean.slice(0, -3)) {
-      return { isCorrect: true, isTypo: false, notice: '', matchedAnswer: cand };
-    }
-    if ((uClean.endsWith('시키다') || uClean.endsWith('되다')) && cClean === uClean.slice(0, -3)) {
-      return { isCorrect: true, isTypo: false, notice: '', matchedAnswer: cand };
-    }
-
-    // 3-4. 부분 일치 (2글자 이상 정확한 서브스트링)
-    if (cClean.length >= 2 && uClean.length >= 2) {
-      if (cClean.startsWith(uClean) && uClean.length >= cClean.length * 0.7) {
+    for (const target of targets) {
+      // 3-1. 후보 뜻과 완전 일치
+      if (uClean === target) {
         return { isCorrect: true, isTypo: false, notice: '', matchedAnswer: cand };
+      }
+
+      // 3-2. 동사 어근 일치 ('시작하다' <-> '시작', '강조하다' <-> '강조')
+      if (target.endsWith('하다') && uClean === target.slice(0, -2)) {
+        return { isCorrect: true, isTypo: false, notice: '', matchedAnswer: cand };
+      }
+      if (uClean.endsWith('하다') && target === uClean.slice(0, -2)) {
+        return { isCorrect: true, isTypo: false, notice: '', matchedAnswer: cand };
+      }
+
+      // 3-3. 접미사 '~시키다', '~되다' 대응
+      if ((target.endsWith('시키다') || target.endsWith('되다')) && uClean === target.slice(0, -3)) {
+        return { isCorrect: true, isTypo: false, notice: '', matchedAnswer: cand };
+      }
+      if ((uClean.endsWith('시키다') || uClean.endsWith('되다')) && target === uClean.slice(0, -3)) {
+        return { isCorrect: true, isTypo: false, notice: '', matchedAnswer: cand };
+      }
+
+      // 3-4. 포함(includes) 일치 (2글자 이상)
+      if (target.length >= 2 && uClean.length >= 2) {
+        if (target.includes(uClean) || uClean.includes(target)) {
+          return { isCorrect: true, isTypo: false, notice: '', matchedAnswer: cand };
+        }
       }
     }
 
@@ -1051,6 +1083,31 @@ async function finishSubjectiveTest() {
     duration_sec: session.elapsedSeconds
   });
 
+  // 📝 Supabase test_logs 테이블에 시험 문항별 상세 로그 적재
+  const sb = window.getSupabase();
+  if (sb && SUPABASE_CONFIG.isConfigured() && session.results && session.results.length > 0) {
+    try {
+      const userId = await getEffectiveUserId(sb);
+      const sessionId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ("00000000-0000-4000-8000-" + Date.now().toString().padStart(12, "0"));
+      const logsToInsert = session.results.map(r => ({
+        session_id: sessionId,
+        user_id: userId,
+        word_id: r.word.id,
+        test_mode: AppState.testMode || "daily_review",
+        question_type: r.questionType || "en_to_kr",
+        input_type: AppState.testType === "handwriting" ? "handwriting" : "keyboard",
+        user_answer: r.userAnswer || "",
+        correct_answer: r.correctAnswer || "",
+        is_correct: Boolean(r.isCorrect),
+        response_time_ms: 1000
+      }));
+      const { error: logErr } = await sb.from("test_logs").insert(logsToInsert);
+      if (logErr) console.warn("Supabase test_logs insert warning:", logErr);
+    } catch (tle) {
+      console.warn("Supabase test_logs insert exception:", tle);
+    }
+  }
+
   switchView("results");
   // 채점 후 틀린 단어 확인 창(모달) 자동 오픈
   showWrongWordsModal();
@@ -1170,6 +1227,141 @@ function retryWrongWordsOnly() {
   }
 
   // test 뷰로 전환하고 오답 단어로만 재출제
+  AppState.currentView = "test";
+  document.querySelectorAll(".view-section").forEach(sec => sec.style.display = "none");
+  const testSec = document.getElementById("view-test");
+  if (testSec) testSec.style.display = "block";
+  document.querySelectorAll(".drawer-nav-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.view === "test");
+  });
+
+  startSubjectiveTest(wrongWords);
+}
+
+// ============================================================================
+// 채점 후 오답 전체 보기 학습 (List View) 제어
+// ============================================================================
+function openWrongWordsListView() {
+  closeWrongWordsModal();
+  const session = AppState.testSession;
+  const wrongResults = (session.results || []).filter(r => !r.isCorrect);
+
+  if (!wrongResults || wrongResults.length === 0) {
+    alert("틀린 단어가 없습니다! 모든 문제를 완벽하게 맞혔습니다 🎉");
+    return;
+  }
+
+  // 오답 결과 저장
+  AppState.wrongWordsList = wrongResults;
+  AppState.wrongStudyState.hideMeaning = false;
+  AppState.wrongStudyState.hideExample = false;
+
+  const toggleMeaningBtn = document.getElementById("toggleWrongMeaningBtn");
+  if (toggleMeaningBtn) toggleMeaningBtn.textContent = "👁️ 뜻 가리기";
+  const toggleExampleBtn = document.getElementById("toggleWrongExampleBtn");
+  if (toggleExampleBtn) toggleExampleBtn.textContent = "💬 예문 접기";
+
+  switchView("wrong-study");
+}
+
+function renderWrongWordsStudyList() {
+  const container = document.getElementById("wrongStudyListContainer");
+  const countBadge = document.getElementById("wrongStudyCountBadge");
+  const retestBtn = document.getElementById("startWrongRetestBtn");
+  if (!container) return;
+
+  const wrongList = AppState.wrongWordsList || [];
+  if (countBadge) countBadge.textContent = `${wrongList.length}단어`;
+  if (retestBtn) retestBtn.textContent = `✍️ 오답 재시험 치기 (${wrongList.length}개) 🔄`;
+
+  container.innerHTML = "";
+
+  if (wrongList.length === 0) {
+    container.innerHTML = `
+      <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+        <div style="font-size: 3rem; margin-bottom: 8px;">🎉✨</div>
+        <div style="font-size: 1.2rem; font-weight: 700; color: #208B67;">틀린 단어가 없습니다! 완벽합니다.</div>
+        <p style="font-size: 0.9rem; margin-top: 6px;">결과 화면으로 돌아가거나 오늘의 학습을 완료해보세요.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const hideMeaning = AppState.wrongStudyState.hideMeaning;
+  const hideExample = AppState.wrongStudyState.hideExample;
+
+  wrongList.forEach((r, idx) => {
+    const w = r.word || {};
+    const { ex1En, ex1Kr, ex2En, ex2Kr, hasEx1, hasEx2 } = getWordExamples(w);
+    const userAnswerTrimmed = (r.userAnswer || "").trim();
+
+    const card = document.createElement("div");
+    card.className = "wrong-study-card";
+
+    card.innerHTML = `
+      <div class="wrong-study-top">
+        <div class="wrong-study-word-wrap">
+          <span class="wrong-study-index">${idx + 1}</span>
+          <span class="wrong-study-term">${w.word || ""}</span>
+          <button class="btn-icon-kawaii vocab-pronounce-btn" style="width: 28px; height: 28px; font-size: 0.85rem; padding: 0;" onclick="speakWord('${w.word || ""}')" title="발음 듣기">🔊</button>
+          <span class="wrong-study-pron">${w.pronunciation || ""} ${w.pos ? `[${w.pos}]` : ""}</span>
+        </div>
+        <div>
+          <span style="font-size: 0.78rem; font-weight: 800; color: #FF4757; background: rgba(255, 71, 87, 0.1); border: 1px solid rgba(255, 71, 87, 0.25); padding: 3px 8px; border-radius: 99px;">
+            ⚠️ 오답 복습
+          </span>
+        </div>
+      </div>
+
+      <div class="wrong-study-diff">
+        <!-- 내가 작성한 오답 -->
+        <div class="diff-box wrong">
+          <div class="diff-box-label">❌ 내가 작성한 오답</div>
+          <div class="diff-box-value">
+            ${userAnswerTrimmed ? userAnswerTrimmed : '<span style="color: var(--text-muted); font-weight: normal; font-size: 0.9rem;">(미작성)</span>'}
+          </div>
+        </div>
+
+        <!-- 정답 뜻 -->
+        <div class="diff-box correct">
+          <div class="diff-box-label">✨ 정답 뜻</div>
+          <div class="diff-box-value ${hideMeaning ? "wrong-meaning-blurred" : ""}" onclick="this.classList.toggle('wrong-meaning-blurred')" title="클릭하여 뜻 보기/가리기">
+            ${formatMeaningToHtml(w.meaning || r.correctAnswer || "")}
+          </div>
+        </div>
+      </div>
+
+      <!-- 예문 및 해석 -->
+      <div class="wrong-study-examples ${hideExample ? "hidden-example" : ""}">
+        <div style="font-weight: 700; color: var(--text-main); line-height: 1.4;">
+          ${hasEx1 ? ex1En : "등록된 예문이 없습니다."}
+        </div>
+        <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 3px;">
+          ${hasEx1 ? ex1Kr : ""}
+        </div>
+        ${hasEx2 ? `
+        <div style="font-weight: 700; color: var(--text-main); margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(0,0,0,0.08); line-height: 1.4;">
+          ${ex2En}
+        </div>
+        <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 3px;">
+          ${ex2Kr || ""}
+        </div>
+        ` : ""}
+      </div>
+    `;
+
+    container.appendChild(card);
+  });
+}
+
+function startSubjectiveTestFromWrongList() {
+  const wrongWords = (AppState.wrongWordsList || []).map(r => r.word || r).filter(Boolean);
+  if (!wrongWords || wrongWords.length === 0) {
+    alert("재시험을 치를 오답 단어가 없습니다! 🎉");
+    return;
+  }
+
+  // test 뷰로 전환하고 오답 단어만 출제
   AppState.currentView = "test";
   document.querySelectorAll(".view-section").forEach(sec => sec.style.display = "none");
   const testSec = document.getElementById("view-test");
@@ -1392,34 +1584,59 @@ function openSafeDeleteModal(bookId) {
   document.getElementById("safeDeleteModal").classList.add("active");
 }
 
-function executeSafeDelete() {
+async function executeSafeDelete() {
   if (!targetDeleteBookId) return;
 
-  // 1. 보존 전용 단어장 확보
-  let archiveBook = AppState.wordbooks.find(b => b.is_vulnerable_archive);
-  if (!archiveBook) {
-    archiveBook = {
-      id: Date.now(),
-      title: "💖 취약 단어 보존함",
-      description: "삭제된 단어장에서 자동 보존된 취약 단어들",
-      is_vulnerable_archive: true
-    };
-    AppState.wordbooks.push(archiveBook);
+  const sb = window.getSupabase();
+  if (!sb || !SUPABASE_CONFIG.isConfigured()) {
+    alert("⚠️ Supabase DB에 연결되어 있지 않아 단어장을 삭제할 수 없습니다.");
+    return;
   }
 
-  // 2. 취약 단어는 archiveBook으로 이전, 나머지는 삭제
-  AppState.words.forEach(w => {
-    if (AppState.progressMap[w.id]?.is_vulnerable) {
-      w.wordbook_id = archiveBook.id;
-    }
-  });
+  try {
+    // 1. Supabase에서 보존 전용 단어장 확보
+    let archiveBook = AppState.wordbooks.find(b => b.is_vulnerable_archive);
+    let archiveBookId = archiveBook?.id;
 
-  // 3. 단어장 삭제
-  AppState.wordbooks = AppState.wordbooks.filter(b => b.id !== targetDeleteBookId);
-  saveLocalState();
-  document.getElementById("safeDeleteModal").classList.remove("active");
-  renderWordbooksList();
-  alert("🌸 취약 단어가 '💖 취약 단어 보존함'으로 안전하게 이관되었습니다!");
+    if (!archiveBookId) {
+      const { data: newArch, error: archErr } = await sb.from("wordbooks").insert([{
+        title: "💖 취약 단어 보존함",
+        description: "삭제된 단어장에서 자동 보존된 취약 단어들",
+        is_vulnerable_archive: true
+      }]).select();
+      if (archErr) throw archErr;
+      if (newArch && newArch[0]) archiveBookId = newArch[0].id;
+    }
+
+    // 2. 취약 단어는 archiveBook으로 이전
+    const vulnerableWords = AppState.words.filter(w => Number(w.wordbook_id) === Number(targetDeleteBookId) && AppState.progressMap[w.id]?.is_vulnerable);
+    if (vulnerableWords.length > 0 && archiveBookId) {
+      const vulnWordIds = vulnerableWords.map(w => w.id);
+      const { error: moveErr } = await sb.from("words")
+        .update({ wordbook_id: archiveBookId })
+        .in("id", vulnWordIds);
+      if (moveErr) console.warn("Vulnerable words transfer warning:", moveErr);
+    }
+
+    // 3. 삭제 대상 단어장의 일반 단어 삭제 (외래키 제약 방지)
+    const { error: wordsDelErr } = await sb.from("words")
+      .delete()
+      .eq("wordbook_id", targetDeleteBookId);
+    if (wordsDelErr) console.warn("Words delete warning:", wordsDelErr);
+
+    // 4. 단어장 메타 레코드 삭제
+    const { error: bookDelErr } = await sb.from("wordbooks")
+      .delete()
+      .eq("id", targetDeleteBookId);
+    if (bookDelErr) throw bookDelErr;
+
+    document.getElementById("safeDeleteModal").classList.remove("active");
+    alert("🌸 단어장이 삭제되었으며 취약 단어는 안전하게 보존되었습니다!");
+    await syncWordsFromSupabase();
+  } catch (err) {
+    console.error("단어장 삭제 실패:", err);
+    alert("⚠️ 단어장 삭제 중 오류 발생: " + (err.message || err));
+  }
 }
 
 // ============================================================================
@@ -1657,18 +1874,16 @@ function toggleWordLearningStatus(wordId, btnEl) {
   } else {
     // 1이상(학습/복습 단계) -> 🌱 미학습(0단계) 되돌리기
     prog.review_stage = 0;
-    prog.user_status = "unlearned";
+    prog.user_status = "new";
     prog.next_review_at = null;
   }
 
   AppState.progressMap[wordId] = prog;
-  saveLocalState();
 
-  // Supabase 동기화 (설정 시)
+  // Supabase 동기화 (게스트/로그인 모두 지원, 원격 DB 직접 upsert)
   const sb = window.getSupabase();
-  if (sb) {
-    sb.auth.getUser().then(({ data }) => {
-      const userId = data?.user?.id;
+  if (sb && SUPABASE_CONFIG.isConfigured()) {
+    getEffectiveUserId(sb).then(userId => {
       if (userId) {
         sb.from("user_word_progress").upsert({
           user_id: userId,
@@ -1683,7 +1898,7 @@ function toggleWordLearningStatus(wordId, btnEl) {
           recent_accuracy: prog.recent_accuracy || 0,
           next_review_at: prog.next_review_at,
           last_tested_at: prog.last_tested_at
-        }).catch(err => console.warn("Supabase progress upsert error:", err));
+        }, { onConflict: "user_id,word_id" }).catch(err => console.error("Supabase progress upsert error:", err));
       }
     });
   }
@@ -1884,57 +2099,42 @@ function initUploadModal() {
         alertBox.textContent = `💾 총 ${wordsToInsert.length}개 단어 저장 중...`;
 
         const sb = window.getSupabase();
-        let newBookId = Date.now();
+        if (!sb || !SUPABASE_CONFIG.isConfigured()) {
+          throw new Error("Supabase DB 연결이 필요합니다. 상단 ⚙️ 설정에서 DB 접속 정보를 먼저 등록해 주세요.");
+        }
 
-        if (sb && SUPABASE_CONFIG.isConfigured()) {
-          // Supabase wordbooks INSERT
-          const { data: bData, error: bErr } = await sb.from("wordbooks").insert([{
-            title: title,
-            description: desc,
-            daily_new_target: targetNew
-          }]).select();
+        // Supabase wordbooks INSERT
+        const { data: bData, error: bErr } = await sb.from("wordbooks").insert([{
+          title: title,
+          description: desc,
+          daily_new_target: targetNew
+        }]).select();
 
-          if (bErr) throw bErr;
-          if (bData && bData[0]) newBookId = bData[0].id;
+        if (bErr) throw bErr;
+        if (!bData || !bData[0]) throw new Error("단어장 레코드 생성 응답을 받지 못했습니다.");
+        const newBookId = bData[0].id;
 
-          // Supabase words 일괄 INSERT (청크 200개씩)
-          const wordsWithBookId = wordsToInsert.map(w => ({ ...w, wordbook_id: newBookId }));
-          const chunkSize = 200;
-          for (let c = 0; c < wordsWithBookId.length; c += chunkSize) {
-            const chunk = wordsWithBookId.slice(c, c + chunkSize);
-            const { error: wErr } = await sb.from("words").insert(chunk);
-            if (wErr) console.warn("Supabase words chunk insert error:", wErr);
+        // Supabase words 일괄 INSERT (청크 200개씩)
+        const wordsWithBookId = wordsToInsert.map(w => ({ ...w, wordbook_id: newBookId }));
+        const chunkSize = 200;
+        for (let c = 0; c < wordsWithBookId.length; c += chunkSize) {
+          const chunk = wordsWithBookId.slice(c, c + chunkSize);
+          const { error: wErr } = await sb.from("words").insert(chunk);
+          if (wErr) {
+            console.error("Supabase words chunk insert error:", wErr);
+            throw new Error(`단어 데이터 저장 실패 (${c + 1}~${c + chunk.length}): ${wErr.message}`);
           }
         }
 
-        // AppState 및 로컬 동기화
-        const newBookObj = {
-          id: newBookId,
-          title: title,
-          description: desc,
-          daily_new_target: targetNew,
-          is_vulnerable_archive: false
-        };
-        AppState.wordbooks.push(newBookObj);
-        wordsToInsert.forEach((w, idx) => {
-          AppState.words.push({
-            id: newBookId * 10000 + idx,
-            wordbook_id: newBookId,
-            ...w
-          });
-        });
-
-        saveLocalState();
-        updateWordbookSelectDropdown();
-        renderWordbooksList();
-        updateSidebarStats();
+        // Supabase 최신 데이터로 동기화 갱신
+        await syncWordsFromSupabase(newBookId);
 
         alertBox.className = "connection-alert status-connected";
-        alertBox.textContent = `🎉 "${title}" 단어장(${wordsToInsert.length}단어) 등록 완료!`;
+        alertBox.textContent = `🎉 "${title}" 단어장(${wordsToInsert.length}단어) Supabase 등록 완료!`;
 
         setTimeout(() => {
           closeModal();
-          alert(`🌸 새 단어장 [${title}] (${wordsToInsert.length}개 단어)이 성공적으로 등록되었습니다!`);
+          alert(`🌸 새 단어장 [${title}] (${wordsToInsert.length}개 단어)이 Supabase DB에 성공적으로 등록되었습니다!`);
         }, 600);
 
       } catch (err) {
@@ -1955,11 +2155,11 @@ async function refreshDbStatusBadge() {
     badge.className = "status-pill status-connected";
     badge.innerHTML = "🟢 Supabase 연결됨";
   } else if (res.isLocal) {
-    badge.className = "status-pill status-local";
-    badge.innerHTML = "🟡 로컬 모드";
+    badge.className = "status-pill status-error";
+    badge.innerHTML = "🟡 DB 미설정 (연결 필요 ⚙️)";
   } else {
     badge.className = "status-pill status-error";
-    badge.innerHTML = "🔴 연결 오류";
+    badge.innerHTML = "🔴 DB 연결 실패 ⚙️";
   }
 }
 
@@ -2052,8 +2252,32 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("resFinishBtn")?.addEventListener("click", () => switchView("study"));
   document.getElementById("resRetryWrongBtn")?.addEventListener("click", retryWrongWordsOnly);
   document.getElementById("resOpenWrongModalBtn")?.addEventListener("click", showWrongWordsModal);
+  document.getElementById("resOpenWrongStudyBtn")?.addEventListener("click", openWrongWordsListView);
   document.getElementById("btnCloseWrongWordsModal")?.addEventListener("click", closeWrongWordsModal);
   document.getElementById("btnModalRetryWrong")?.addEventListener("click", retryWrongWordsOnly);
+  document.getElementById("btnModalOpenStudyList")?.addEventListener("click", openWrongWordsListView);
+
+  // 오답 전체 보기 학습 뷰 이벤트
+  document.getElementById("btnBackToResultsFromWrong")?.addEventListener("click", () => switchView("results"));
+  document.getElementById("startWrongRetestBtn")?.addEventListener("click", startSubjectiveTestFromWrongList);
+
+  const toggleWrongMeaningBtn = document.getElementById("toggleWrongMeaningBtn");
+  if (toggleWrongMeaningBtn) {
+    toggleWrongMeaningBtn.addEventListener("click", () => {
+      AppState.wrongStudyState.hideMeaning = !AppState.wrongStudyState.hideMeaning;
+      toggleWrongMeaningBtn.textContent = AppState.wrongStudyState.hideMeaning ? "👁️ 뜻 보이기" : "👁️ 뜻 가리기";
+      renderWrongWordsStudyList();
+    });
+  }
+
+  const toggleWrongExampleBtn = document.getElementById("toggleWrongExampleBtn");
+  if (toggleWrongExampleBtn) {
+    toggleWrongExampleBtn.addEventListener("click", () => {
+      AppState.wrongStudyState.hideExample = !AppState.wrongStudyState.hideExample;
+      toggleWrongExampleBtn.textContent = AppState.wrongStudyState.hideExample ? "💬 예문 보이기" : "💬 예문 접기";
+      renderWrongWordsStudyList();
+    });
+  }
 
   // 단어장 안전 삭제 모달 이벤트
   document.getElementById("btnConfirmPreserveDelete").addEventListener("click", executeSafeDelete);
@@ -2116,6 +2340,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const activeBook = AppState.wordbooks.find(b => Number(b.id) === Number(AppState.activeWordbookId));
     if (activeBook) {
       activeBook.daily_new_target = targetNew;
+      const sb = window.getSupabase();
+      if (sb && SUPABASE_CONFIG.isConfigured()) {
+        try {
+          await sb.from("wordbooks").update({ daily_new_target: targetNew }).eq("id", activeBook.id);
+        } catch (e) {
+          console.warn("Wordbook target update warning:", e);
+        }
+      }
     }
     saveLocalState();
     updateSidebarStats();
@@ -2130,18 +2362,17 @@ document.addEventListener("DOMContentLoaded", () => {
     SUPABASE_CONFIG.saveConfig(url, key);
     initSupabase();
     await refreshDbStatusBadge();
-    alertBox.className = `connection-alert ${res.success ? 'status-connected' : (res.isLocal ? 'status-local' : 'status-error')}`;
+    alertBox.className = `connection-alert ${res.success ? 'status-connected' : 'status-error'}`;
     alertBox.textContent = res.message;
     if (res.success) {
       alertBox.textContent = "🔄 Supabase 데이터베이스 동기화 중...";
       await syncWordsFromSupabase();
-      alert("🌸 설정(학습 목표 및 Supabase)이 저장되고 정상 연결되었습니다!");
+      alert("🌸 Supabase 설정이 저장되고 정상 연결되었습니다!");
       settingsModal.classList.remove("active");
     } else if (res.isLocal) {
-      alert("🌸 설정(학습 목표 및 로컬 모드)이 저장되었습니다.");
-      settingsModal.classList.remove("active");
+      alert("⚠️ 유효한 Supabase URL과 Key를 입력해 주세요. (원격 DB 연동 전용)");
     } else {
-      alert("⚠️ " + res.message);
+      alert("⚠️ Supabase 연결 실패: " + res.message);
     }
   });
 
@@ -2207,15 +2438,29 @@ document.addEventListener("DOMContentLoaded", () => {
   const printExamBtn = document.getElementById("printExamBtn");
   if (printExamBtn) printExamBtn.addEventListener("click", printBlankTest);
 
+  // 상단 DB 상태 뱃지 클릭 시 설정 모달 열기
+  const dbBadge = document.getElementById("dbStatusBadge");
+  if (dbBadge) {
+    dbBadge.style.cursor = "pointer";
+    dbBadge.addEventListener("click", () => {
+      settingsModal.classList.add("active");
+    });
+  }
+
   // 초기 뷰 렌더링
   switchView("study");
 
   // Supabase words 테이블 최신 단어 & 예문 비동기 로드
-  if (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.isConfigured()) {
-    syncWordsFromSupabase(AppState.activeWordbookId).then(success => {
-      if (success) {
-        refreshDbStatusBadge();
-      }
-    });
-  }
+  refreshDbStatusBadge().then(() => {
+    if (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.isConfigured()) {
+      syncWordsFromSupabase(AppState.activeWordbookId).then(success => {
+        if (!success) {
+          settingsModal.classList.add("active");
+        }
+      });
+    } else {
+      // Supabase 접속 정보 미설정 시 설정 모달 자동 노출
+      settingsModal.classList.add("active");
+    }
+  });
 });

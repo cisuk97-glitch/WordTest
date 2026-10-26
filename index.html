@@ -35,7 +35,7 @@
 
     <div class="nav-right">
       <!-- 데이터베이스 연결 상태 배지 -->
-      <span id="dbStatusBadge" class="status-pill status-local" title="데이터베이스 연결 상태">🟡 로컬 모드</span>
+      <span id="dbStatusBadge" class="status-pill status-local" title="데이터베이스 연결 상태" style="cursor: pointer;">🟡 DB 연결 확인 중...</span>
 
       <!-- 단어장 선택 드롭다운 -->
       <select id="activeWordbookSelect" class="btn-tool-kawaii"
@@ -237,12 +237,46 @@
                 [단어테스트] 수능 2000 핵심 단어 (90%) - 소요시간: 135초, 완료(TRUE)
               </div>
             </div>
-          </div>
-
           <div style="display: flex; justify-content: center; gap: 14px; margin-top: 10px; flex-wrap: wrap;">
             <button class="btn-kawaii-secondary" id="resOpenWrongModalBtn" style="border-color: var(--coral-pink); color: var(--coral-pink);">틀린 단어 확인 📝</button>
+            <button class="btn-kawaii-secondary" id="resOpenWrongStudyBtn" style="background: var(--baby-pink-soft); border-color: var(--coral-pink); color: var(--coral-pink); font-weight: 800;">오답 전체 보기 학습 📖</button>
             <button class="btn-kawaii-secondary" id="resRetryWrongBtn">오답만 다시 풀기 🔄</button>
             <button class="btn-kawaii-primary" id="resFinishBtn">오늘의 학습 완료 🌸</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================
+           VIEW: 채점 후 오답 단어 전체 보기 학습 (wrong-study)
+           ======================================================== -->
+      <section id="view-wrong-study" class="view-section" style="display: none;">
+        <div class="test-arena-card wordlist-screen-card">
+          <!-- 상단 툴바 및 액션 -->
+          <div class="wordlist-screen-toolbar">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; border-bottom: 2px dashed var(--border-soft); padding-bottom: 14px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <h2 style="font-family: var(--font-cute); font-size: 1.8rem; color: var(--coral-pink); margin: 0;">
+                  📖 오답 전체 보기 학습
+                </h2>
+                <span class="unit-tag" id="wrongStudyCountBadge" style="background: rgba(255, 71, 87, 0.12); color: #FF4757; border-color: rgba(255, 71, 87, 0.3);">0단어</span>
+              </div>
+
+              <!-- 상단 액션 버튼들 -->
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <button class="btn-tool-kawaii" id="toggleWrongMeaningBtn" title="단어 뜻 블러/표시 토글">👁️ 뜻 가리기</button>
+                <button class="btn-tool-kawaii" id="toggleWrongExampleBtn" title="예문 접기/펴기 토글">💬 예문 접기</button>
+                <button class="btn-kawaii-secondary" id="btnBackToResultsFromWrong" style="padding: 6px 14px; font-size: 0.88rem;">📊 결과 화면</button>
+                <button class="btn-kawaii-primary" id="startWrongRetestBtn" style="padding: 6px 16px; font-size: 0.92rem;">✍️ 오답 재시험 치기 🔄</button>
+              </div>
+            </div>
+            <p style="font-size: 0.88rem; color: var(--text-muted); margin: 10px 0 0 0;">
+              방금 테스트에서 틀린 단어들의 뜻과 예문, 내가 쓴 오답을 확인하며 복습하세요. 복습이 끝나면 <strong>[오답 재시험 치기]</strong>로 다시 실력을 점검할 수 있습니다.
+            </p>
+          </div>
+
+          <!-- 오답 단어 카드 리스트 컨테이너 -->
+          <div id="wrongStudyListContainer" class="wordlist-screen-container" style="margin-top: 16px; max-height: calc(100vh - 290px); overflow-y: auto;">
+            <!-- JS 동적 렌더링 -->
           </div>
         </div>
       </section>
@@ -538,6 +572,7 @@
 
       <!-- 하단 액션 버튼 -->
       <div class="wrong-modal-actions">
+        <button class="btn-kawaii-secondary" id="btnModalOpenStudyList" style="background: var(--baby-pink-soft); border-color: var(--coral-pink); color: var(--coral-pink); font-weight: 800;">오답 전체 보기 학습 📖</button>
         <button class="btn-kawaii-secondary" id="btnModalRetryWrong">오답만 다시 풀기 🔄</button>
         <button class="btn-kawaii-primary" id="btnCloseWrongWordsModal">확인 / 결과 보기 🌸</button>
       </div>

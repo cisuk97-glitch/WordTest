@@ -1451,6 +1451,135 @@ body::before {
   word-break: break-word;
 }
 
+/* ==========================================================================
+   오답 전체 보기 학습 (view-wrong-study) 전용 스타일
+   ========================================================================== */
+.wrong-study-card {
+  background: var(--bg-card);
+  border: 2px solid rgba(255, 71, 87, 0.25);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  margin-bottom: 14px;
+  box-shadow: 0 4px 12px rgba(255, 71, 87, 0.05);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.wrong-study-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(255, 71, 87, 0.12);
+  border-color: var(--coral-pink);
+}
+
+.wrong-study-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  border-bottom: 1.5px dashed var(--border-soft);
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+}
+
+.wrong-study-word-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wrong-study-index {
+  font-family: var(--font-en);
+  font-weight: 800;
+  font-size: 1rem;
+  color: #fff;
+  background: #FF4757;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wrong-study-term {
+  font-family: var(--font-cute);
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--text-title);
+  letter-spacing: 0.5px;
+}
+
+.wrong-study-pron {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  font-family: var(--font-en);
+}
+
+.wrong-study-diff {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.diff-box {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.diff-box.correct {
+  background: rgba(32, 139, 103, 0.08);
+  border: 1.5px solid rgba(32, 139, 103, 0.3);
+  color: #208B67;
+}
+
+.diff-box.wrong {
+  background: rgba(255, 71, 87, 0.08);
+  border: 1.5px solid rgba(255, 71, 87, 0.3);
+  color: #FF4757;
+}
+
+.diff-box-label {
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.diff-box-value {
+  font-weight: 700;
+  font-size: 1.05rem;
+  word-break: break-word;
+}
+
+.wrong-study-examples {
+  background: var(--bg-card-alt);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  border: 1px solid var(--border-soft);
+  font-size: 0.9rem;
+}
+
+.wrong-study-examples.hidden-example {
+  display: none !important;
+}
+
+.wrong-meaning-blurred {
+  filter: blur(5px);
+  user-select: none;
+  cursor: pointer;
+  transition: filter 0.2s ease;
+}
+
+.wrong-meaning-blurred:hover {
+  filter: blur(2px);
+}
+
 .user-wrong-badge {
   display: inline-block;
   background: rgba(255, 71, 87, 0.1);
