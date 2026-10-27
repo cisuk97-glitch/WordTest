@@ -317,7 +317,11 @@ function updateEbbinghausProgress(wordId, isCorrect, responseTimeMs, questionTyp
           recent_accuracy: prog.recent_accuracy,
           next_review_at: prog.next_review_at,
           last_tested_at: prog.last_tested_at
-        }, { onConflict: "user_id,word_id" }).catch(err => console.error("Supabase progress upsert error:", err));
+        }, { onConflict: "user_id,word_id" })
+        .then(({ error }) => {
+          if (error) console.error("❌ [user_word_progress] DB 저장 실패:", error);
+        })
+        .catch(err => console.error("Supabase progress upsert error:", err));
       }
     });
   }
@@ -1893,7 +1897,11 @@ function toggleWordLearningStatus(wordId, btnEl) {
           recent_accuracy: prog.recent_accuracy || 0,
           next_review_at: prog.next_review_at,
           last_tested_at: prog.last_tested_at
-        }, { onConflict: "user_id,word_id" }).catch(err => console.error("Supabase progress upsert error:", err));
+        }, { onConflict: "user_id,word_id" })
+        .then(({ error }) => {
+          if (error) console.error("❌ [user_word_progress] DB 저장 실패:", error);
+        })
+        .catch(err => console.error("Supabase progress upsert error:", err));
       }
     });
   }
