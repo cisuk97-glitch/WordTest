@@ -99,12 +99,7 @@ async function getEffectiveUserId(sb) {
       if (data?.user?.id) return data.user.id;
     } catch (e) { }
   }
-  let guestId = localStorage.getItem("cozy_guest_user_id");
-  if (!guestId) {
-    guestId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : GUEST_USER_ID;
-    localStorage.setItem("cozy_guest_user_id", guestId);
-  }
-  return guestId;
+  return window.SUPABASE_CONFIG ? window.SUPABASE_CONFIG.getUserId() : GUEST_USER_ID;
 }
 
 // ============================================================================
@@ -2290,6 +2285,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const openSettings = async () => {
     document.getElementById("cfgSbUrl").value = SUPABASE_CONFIG.getUrl();
     document.getElementById("cfgSbKey").value = SUPABASE_CONFIG.getKey();
+    const cfgUserEl = document.getElementById("cfgUserId");
+    if (cfgUserEl) cfgUserEl.value = SUPABASE_CONFIG.getUserId();
 
     const cfgNewEl = document.getElementById("cfgTargetNew");
     if (cfgNewEl) cfgNewEl.value = AppState.settings.targetNewWords || 10;
@@ -2332,6 +2329,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btnSaveConfig").addEventListener("click", async () => {
     const url = document.getElementById("cfgSbUrl").value.trim();
     const key = document.getElementById("cfgSbKey").value.trim();
+    const userIdInput = document.getElementById("cfgUserId")?.value.trim() || "";
 
     // 일일 학습 목표 저장
     const targetNew = parseInt(document.getElementById("cfgTargetNew")?.value) || 10;
@@ -2359,7 +2357,7 @@ document.addEventListener("DOMContentLoaded", () => {
     alertBox.textContent = "🔄 연결 확인 및 설정 저장 중...";
     const res = await window.checkSupabaseHealth(url, key);
     btnSave.disabled = false;
-    SUPABASE_CONFIG.saveConfig(url, key);
+    SUPABASE_CONFIG.saveConfig(url, key, userIdInput);
     initSupabase();
     await refreshDbStatusBadge();
     alertBox.className = `connection-alert ${res.success ? 'status-connected' : 'status-error'}`;

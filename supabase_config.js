@@ -6,6 +6,7 @@ const SUPABASE_CONFIG = {
     // 기본 설정값 (사용자가 UI에서 변경하거나 로컬스토리지에 저장 가능)
     DEFAULT_URL: "https://your-project.supabase.co",
     DEFAULT_KEY: "your-anon-key",
+    DEFAULT_USER_ID: "00000000-0000-0000-0000-000000000001",
     
     getUrl() {
         return localStorage.getItem("cozy_sb_url") || this.DEFAULT_URL;
@@ -14,10 +15,22 @@ const SUPABASE_CONFIG = {
     getKey() {
         return localStorage.getItem("cozy_sb_key") || this.DEFAULT_KEY;
     },
+
+    getUserId() {
+        return localStorage.getItem("cozy_guest_user_id") || this.DEFAULT_USER_ID;
+    },
     
-    saveConfig(url, key) {
+    saveConfig(url, key, userId) {
         localStorage.setItem("cozy_sb_url", url.trim());
         localStorage.setItem("cozy_sb_key", key.trim());
+        if (userId !== undefined) {
+            this.saveUserId(userId);
+        }
+    },
+
+    saveUserId(userId) {
+        const id = (userId && userId.trim()) ? userId.trim() : this.DEFAULT_USER_ID;
+        localStorage.setItem("cozy_guest_user_id", id);
     },
     
     isConfigured() {
@@ -49,7 +62,7 @@ async function checkSupabaseHealth(url, key) {
     const targetUrl = url || SUPABASE_CONFIG.getUrl();
     const targetKey = key || SUPABASE_CONFIG.getKey();
     if (!targetUrl || !targetKey || targetUrl.includes("your-project") || targetKey.includes("your-anon-key")) {
-        return { success: false, isLocal: true, message: "🟡 로컬 스토리지 모드 (Supabase 미설정)" };
+        return { success: false, isLocal: true, message: "🟡 Supabase DB 접속 정보 미설정 (연결 필요)" };
     }
     if (!window.supabase) {
         return { success: false, isLocal: true, message: "⚠️ Supabase SDK 로드 대기 중" };
