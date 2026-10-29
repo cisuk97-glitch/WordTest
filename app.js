@@ -567,17 +567,33 @@ function getTodayStudyWords() {
     return prog && prog.review_stage > 0 && prog.next_review_at && new Date(prog.next_review_at) <= todayEnd;
   });
 
+  const allVulnerableWords = AppState.words.filter(w => {
+    const prog = AppState.progressMap[w.id];
+    return prog && prog.is_vulnerable;
+  });
+
   const targetNewCount = AppState.settings.targetNewWords || 10;
   const todayNewWords = allNewWords.slice(0, targetNewCount);
   const todayReviewWords = allReviewWords; // 망각곡선 도래 단어 전량 포함
-  const todayWords = [...todayNewWords, ...todayReviewWords];
+  const todayVulnerableWords = allVulnerableWords; // 취약 단어 전량 포함
+
+  // 신규 + 복습 + 취약 단어 중복 없이 병합 (id 기준)
+  const combinedMap = new Map();
+  [...todayNewWords, ...todayReviewWords, ...todayVulnerableWords].forEach(w => {
+    if (!combinedMap.has(w.id)) {
+      combinedMap.set(w.id, w);
+    }
+  });
+  const todayWords = Array.from(combinedMap.values());
 
   return {
     todayWords: todayWords.length > 0 ? todayWords : AppState.words,
     todayNewWords,
     todayReviewWords,
+    todayVulnerableWords,
     allNewWords,
-    allReviewWords
+    allReviewWords,
+    allVulnerableWords
   };
 }
 
@@ -1711,14 +1727,8 @@ function renderWordListView() {
   const now = new Date();
   const st = AppState.wordlistState;
 
-  // 1. 오늘 학습 대상 추출 (신규 + 복습 및 복습 0개 시 +10 보정)
-  const { todayWords, todayNewWords, todayReviewWords } = getTodayStudyWords();
-
-  // 취약 단어는 오늘의 학습 단어 중 취약한 단어
-  const todayVulnerableWords = todayWords.filter(w => {
-    const prog = AppState.progressMap[w.id];
-    return prog && prog.is_vulnerable;
-  });
+  // 1. 오늘 학습 대상 추출 (신규 + 복습 + 취약 단어)
+  const { todayWords, todayNewWords, todayReviewWords, todayVulnerableWords } = getTodayStudyWords();
 
   // 필터별 개수 뱃지 갱신 (오늘 학습 대상 기준)
   refreshWordListFilterCounters();
@@ -1823,11 +1833,7 @@ function renderWordListView() {
 }
 
 function refreshWordListFilterCounters() {
-  const { todayWords, todayNewWords, todayReviewWords } = getTodayStudyWords();
-  const todayVulnerableWords = todayWords.filter(w => {
-    const prog = AppState.progressMap[w.id];
-    return prog && prog.is_vulnerable;
-  });
+  const { todayWords, todayNewWords, todayReviewWords, todayVulnerableWords } = getTodayStudyWords();
 
   const cntAllEl = document.getElementById("cntFilterAll");
   if (cntAllEl) cntAllEl.textContent = todayWords.length;
